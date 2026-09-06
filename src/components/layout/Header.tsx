@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuGroup,
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
@@ -47,19 +48,14 @@ export function Header({ name, email }: { name: string; email: string | null }) 
           }
         />
         <DropdownMenuContent align="end" className="w-56">
-          <DropdownMenuLabel>
-            <p className="truncate text-sm font-medium">{name || "Your account"}</p>
-            {email ? <p className="truncate text-xs font-normal text-muted-foreground">{email}</p> : null}
-          </DropdownMenuLabel>
+          <DropdownMenuGroup>
+            <DropdownMenuLabel>
+              <p className="truncate text-sm font-medium">{name || "Your account"}</p>
+              {email ? <p className="truncate text-xs font-normal text-muted-foreground">{email}</p> : null}
+            </DropdownMenuLabel>
+          </DropdownMenuGroup>
           <DropdownMenuSeparator />
-          <DropdownMenuItem
-            variant="destructive"
-            disabled={loggingOut}
-            onSelect={(e) => {
-              e.preventDefault();
-              handleLogout();
-            }}
-          >
+          <DropdownMenuItem variant="destructive" disabled={loggingOut} onClick={handleLogout}>
             <LogOut className="size-4" />
             {loggingOut ? "Logging out..." : "Logout"}
           </DropdownMenuItem>

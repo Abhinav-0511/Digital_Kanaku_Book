@@ -32,6 +32,7 @@ export default async function DashboardPage() {
       <Button
         size="lg"
         className="h-12 w-full text-base md:w-auto"
+        nativeButton={false}
         render={
           <Link href="/loads/new">
             <Plus className="size-5" />

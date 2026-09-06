@@ -59,6 +59,7 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
         <Button
           variant="outline"
           className="h-11 flex-1"
+          nativeButton={false}
           render={
             <Link href={`/loads/${load.id}/edit`}>
               <Pencil className="size-4" />

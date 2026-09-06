@@ -39,6 +39,7 @@ export default async function LoadsPage({ searchParams }: LoadsPageProps) {
         <h1 className="text-xl font-semibold">Loads</h1>
         <Button
           className="h-10"
+          nativeButton={false}
           render={
             <Link href="/loads/new">
               <Plus className="size-4" />
