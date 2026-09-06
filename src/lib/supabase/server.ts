@@ -1,3 +1,4 @@
+import { cache } from "react";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import type { Database } from "@/types/database.types";
@@ -25,3 +26,17 @@ export async function createClient() {
     },
   });
 }
+
+/**
+ * `auth.getUser()` re-validates the JWT against the Auth server on every
+ * call — necessary for security, but a page or action often needs the
+ * current user in several places (layout auth check, several parallel data
+ * fetches, a mutation's ownership check). `cache()` dedupes those into a
+ * single network round trip per request/action invocation.
+ */
+export const getAuthedUser = cache(async () => {
+  const supabase = await createClient();
+  const { data, error } = await supabase.auth.getUser();
+  if (error) return null;
+  return data.user;
+});

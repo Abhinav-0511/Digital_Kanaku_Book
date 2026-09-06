@@ -141,7 +141,16 @@ export interface Database {
       };
     };
     Views: Record<string, never>;
-    Functions: Record<string, never>;
+    Functions: {
+      find_or_create_company: {
+        Args: { p_user_id: string; p_name: string; p_name_normalized: string };
+        Returns: { id: string; name: string }[];
+      };
+      find_or_create_party: {
+        Args: { p_user_id: string; p_name: string; p_name_normalized: string };
+        Returns: { id: string; name: string }[];
+      };
+    };
     Enums: Record<string, never>;
     CompositeTypes: Record<string, never>;
   };

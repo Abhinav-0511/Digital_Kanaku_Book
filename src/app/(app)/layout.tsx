@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthedUser } from "@/lib/supabase/server";
 import { getCurrentProfile } from "@/lib/actions/profile";
 import { Sidebar } from "@/components/layout/Sidebar";
 import { BottomNav } from "@/components/layout/BottomNav";
@@ -9,9 +9,7 @@ import { SetupRequired } from "@/components/common/SetupRequired";
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   let user;
   try {
-    const supabase = await createClient();
-    const { data } = await supabase.auth.getUser();
-    user = data.user;
+    user = await getAuthedUser();
   } catch {
     return <SetupRequired />;
   }
@@ -20,6 +18,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     redirect("/login");
   }
 
+  // getCurrentProfile() reuses this same request's cached getAuthedUser()
+  // call — no second round trip to the Auth server.
   const { profile, email } = await getCurrentProfile();
 
   return (

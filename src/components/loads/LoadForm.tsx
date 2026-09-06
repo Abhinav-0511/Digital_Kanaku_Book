@@ -225,8 +225,9 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
 
       <Field label="Company" htmlFor="companyName" error={errors.companyName}>
         <NameCombobox
+          id="companyName"
           label="Company"
-          placeholder="Search or select company"
+          placeholder="Type or select a company"
           value={values.companyName}
           onChange={(v) => setField("companyName", v)}
           search={searchCompanies}
@@ -236,8 +237,9 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
 
       <Field label="Party" htmlFor="partyName" error={errors.partyName}>
         <NameCombobox
+          id="partyName"
           label="Party"
-          placeholder="Search or select party"
+          placeholder="Type or select a party"
           value={values.partyName}
           onChange={(v) => setField("partyName", v)}
           search={searchParties}

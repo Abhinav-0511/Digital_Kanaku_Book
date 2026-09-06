@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthedUser } from "@/lib/supabase/server";
 import { friendlyErrorMessage, logServerError } from "@/lib/errors";
 import { nameEntrySchema } from "@/lib/validation/schemas";
 import type { Company, Party } from "@/types/domain";
@@ -12,12 +12,10 @@ export function normalizeName(name: string): string {
 }
 
 export async function searchLookup(table: LookupTable, query: string): Promise<Company[] | Party[]> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthedUser();
   if (!user) return [];
 
+  const supabase = await createClient();
   const trimmed = query.trim();
   let request = supabase.from(table).select("id, name").order("name").limit(20);
   if (trimmed) {
@@ -32,6 +30,13 @@ export async function searchLookup(table: LookupTable, query: string): Promise<C
   return data ?? [];
 }
 
+/**
+ * Finds an existing company/party by normalized name, or creates it —
+ * atomically, in a single round trip (see migration 0003). This is what
+ * lets the Add Load form "just work": whatever name is typed is used
+ * as-is, matched case/space-insensitively against what already exists,
+ * and created automatically if it doesn't.
+ */
 export async function findOrCreateLookup(
   table: LookupTable,
   rawName: string,
@@ -41,49 +46,24 @@ export async function findOrCreateLookup(
     return { success: false, error: parsed.error.issues[0]?.message ?? "Required" };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthedUser();
   if (!user) {
     return { success: false, error: "You need to be logged in." };
   }
 
   const name = parsed.data;
   const nameNormalized = normalizeName(name);
+  const rpcName = table === "companies" ? "find_or_create_company" : "find_or_create_party";
 
-  const existing = await supabase
-    .from(table)
-    .select("id, name")
-    .eq("name_normalized", nameNormalized)
-    .maybeSingle();
-
-  if (existing.data) {
-    return { success: true, id: existing.data.id, name: existing.data.name };
-  }
-
-  const inserted = await supabase
-    .from(table)
-    .insert({ user_id: user.id, name, name_normalized: nameNormalized })
-    .select("id, name")
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .rpc(rpcName, { p_user_id: user.id, p_name: name, p_name_normalized: nameNormalized })
     .single();
 
-  if (inserted.error || !inserted.data) {
-    // Concurrent duplicate insert (e.g. rapid double-tap on "+ Add new") —
-    // fall back to the row that won the race instead of erroring out.
-    if ((inserted.error as { code?: string } | null)?.code === "23505") {
-      const retry = await supabase
-        .from(table)
-        .select("id, name")
-        .eq("name_normalized", nameNormalized)
-        .maybeSingle();
-      if (retry.data) {
-        return { success: true, id: retry.data.id, name: retry.data.name };
-      }
-    }
-    logServerError(`findOrCreateLookup:${table}`, inserted.error);
-    return { success: false, error: friendlyErrorMessage(inserted.error, "Couldn't save that. Please try again.") };
+  if (error || !data) {
+    logServerError(`findOrCreateLookup:${table}`, error);
+    return { success: false, error: friendlyErrorMessage(error, "Couldn't save that. Please try again.") };
   }
 
-  return { success: true, id: inserted.data.id, name: inserted.data.name };
+  return { success: true, id: data.id, name: data.name };
 }

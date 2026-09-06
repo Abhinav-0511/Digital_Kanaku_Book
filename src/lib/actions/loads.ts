@@ -1,7 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, getAuthedUser } from "@/lib/supabase/server";
 import { friendlyErrorMessage, logServerError } from "@/lib/errors";
 import { loadInputSchema } from "@/lib/validation/schemas";
 import { normalizeVehicleNumber } from "@/lib/formatting/vehicle";
@@ -43,25 +43,22 @@ async function resolveAndValidate(input: LoadFormInput) {
     return { success: false as const, error: parsed.error.issues[0]?.message ?? "Please check your details." };
   }
 
-  const company = await findOrCreateLookup("companies", parsed.data.companyName);
+  const [company, party] = await Promise.all([
+    findOrCreateLookup("companies", parsed.data.companyName),
+    findOrCreateLookup("parties", parsed.data.partyName),
+  ]);
   if (!company.success) return { success: false as const, error: company.error };
-
-  const party = await findOrCreateLookup("parties", parsed.data.partyName);
   if (!party.success) return { success: false as const, error: party.error };
 
   return { success: true as const, data: parsed.data, companyId: company.id, partyId: party.id };
 }
 
 export async function createLoad(input: LoadFormInput): Promise<LoadActionResult> {
-  const resolved = await resolveAndValidate(input);
+  const [resolved, user] = await Promise.all([resolveAndValidate(input), getAuthedUser()]);
   if (!resolved.success) return { success: false, error: resolved.error };
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "You need to be logged in." };
 
+  const supabase = await createClient();
   const { data, error } = await supabase
     .from("loads")
     .insert({
@@ -91,15 +88,11 @@ export async function createLoad(input: LoadFormInput): Promise<LoadActionResult
 }
 
 export async function updateLoad(loadId: string, input: LoadFormInput): Promise<LoadActionResult> {
-  const resolved = await resolveAndValidate(input);
+  const [resolved, user] = await Promise.all([resolveAndValidate(input), getAuthedUser()]);
   if (!resolved.success) return { success: false, error: resolved.error };
-
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
   if (!user) return { success: false, error: "You need to be logged in." };
 
+  const supabase = await createClient();
   const { error } = await supabase
     .from("loads")
     .update({
@@ -129,12 +122,10 @@ export async function updateLoad(loadId: string, input: LoadFormInput): Promise<
 }
 
 export async function deleteLoad(loadId: string): Promise<LoadActionResult> {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  const user = await getAuthedUser();
   if (!user) return { success: false, error: "You need to be logged in." };
 
+  const supabase = await createClient();
   const { error } = await supabase.from("loads").delete().eq("id", loadId).eq("user_id", user.id);
 
   if (error) {
@@ -170,11 +161,6 @@ export async function getLoadsForDate(date: string): Promise<Load[]> {
     return [];
   }
   return (data as unknown as LoadRow[]).map(mapLoadRow);
-}
-
-export async function getDailySummary(date: string): Promise<DailySummary> {
-  const loads = await getLoadsForDate(date);
-  return summarize(loads);
 }
 
 export interface SearchLoadsResult {

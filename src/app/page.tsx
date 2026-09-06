@@ -1,15 +1,11 @@
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { getAuthedUser } from "@/lib/supabase/server";
 import { SetupRequired } from "@/components/common/SetupRequired";
 
 export default async function RootPage() {
   let userExists = false;
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    userExists = Boolean(user);
+    userExists = Boolean(await getAuthedUser());
   } catch {
     return <SetupRequired />;
   }

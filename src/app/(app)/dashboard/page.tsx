@@ -4,16 +4,14 @@ import { Button } from "@/components/ui/button";
 import { SummaryCards } from "@/components/dashboard/SummaryCards";
 import { LoadList } from "@/components/loads/LoadList";
 import { getCurrentProfile } from "@/lib/actions/profile";
-import { getDailySummary, getLoadsForDate } from "@/lib/actions/loads";
+import { getLoadsForDate } from "@/lib/actions/loads";
+import { summarize } from "@/lib/loadMapper";
 import { formatLongDate, greetingForNow, todayIso } from "@/lib/formatting/date";
 
 export default async function DashboardPage() {
   const today = todayIso();
-  const [{ profile }, summary, loads] = await Promise.all([
-    getCurrentProfile(),
-    getDailySummary(today),
-    getLoadsForDate(today),
-  ]);
+  const [{ profile }, loads] = await Promise.all([getCurrentProfile(), getLoadsForDate(today)]);
+  const summary = summarize(loads);
 
   const weightUnit = profile?.weightUnit ?? "kg";
   const firstName = profile?.name?.trim().split(" ")[0] || "there";
