@@ -34,6 +34,8 @@ export interface Load {
   weight: number;
   rate: number;
   driverAdvance: number;
+  vehicleRent: number;
+  dieselCost: number;
   gstEnabled: boolean;
   gstPercentage: number;
   baseAmount: number;
@@ -52,6 +54,8 @@ export interface LoadFormValues {
   partyName: string;
   rate: string;
   driverAdvance: string;
+  vehicleRent: string;
+  dieselCost: string;
   gstMode: GstMode;
   customGstPercentage: string;
 }
@@ -62,6 +66,8 @@ export interface DailySummary {
   totalBaseAmount: number;
   totalGstAmount: number;
   totalDriverAdvance: number;
+  totalVehicleRent: number;
+  totalDieselCost: number;
   totalAmount: number;
 }
 

@@ -88,6 +88,8 @@ export interface Database {
           weight: number;
           rate: number;
           driver_advance: number;
+          vehicle_rent: number;
+          diesel_cost: number;
           gst_enabled: boolean;
           gst_percentage: number;
           base_amount: number;
@@ -107,6 +109,8 @@ export interface Database {
           weight: number;
           rate: number;
           driver_advance?: number;
+          vehicle_rent?: number;
+          diesel_cost?: number;
           gst_enabled?: boolean;
           gst_percentage?: number;
         };
@@ -119,6 +123,8 @@ export interface Database {
           weight?: number;
           rate?: number;
           driver_advance?: number;
+          vehicle_rent?: number;
+          diesel_cost?: number;
           gst_enabled?: boolean;
           gst_percentage?: number;
         };

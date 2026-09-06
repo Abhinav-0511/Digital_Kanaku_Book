@@ -50,6 +50,8 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
           {load.gstEnabled ? <Row label="GST Percentage" value={`${formatNumber(load.gstPercentage)}%`} /> : null}
           <Row label="GST Amount" value={formatCurrency(load.gstAmount)} />
           <Row label="Driver Advance" value={formatCurrency(load.driverAdvance)} />
+          <Row label="Vehicle Rent" value={formatCurrency(load.vehicleRent)} />
+          <Row label="Diesel" value={formatCurrency(load.dieselCost)} />
           <Row label="Created At" value={formatDateTime(load.createdAt)} />
           <Row label="Last Updated" value={formatDateTime(load.updatedAt)} />
         </dl>

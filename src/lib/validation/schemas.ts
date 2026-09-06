@@ -50,6 +50,8 @@ export const loadInputSchema = z
     partyName: z.string().trim().min(1, "Select or enter a party").max(100, "Party name is too long"),
     rate: z.coerce.number({ message: "Enter a valid rate" }).min(0, "Rate cannot be negative"),
     driverAdvance: z.coerce.number().min(0, "Driver advance cannot be negative").default(0),
+    vehicleRent: z.coerce.number().min(0, "Vehicle rent cannot be negative").default(0),
+    dieselCost: z.coerce.number().min(0, "Diesel cost cannot be negative").default(0),
     gstMode: gstModeSchema,
     customGstPercentage: z.coerce.number().min(0).max(100).optional(),
     loadDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),

@@ -6,13 +6,10 @@ import { friendlyErrorMessage, logServerError } from "@/lib/errors";
 import { loadInputSchema } from "@/lib/validation/schemas";
 import { normalizeVehicleNumber } from "@/lib/formatting/vehicle";
 import { findOrCreateLookup } from "./_lookups";
-import { mapLoadRow, summarize, type LoadRow } from "@/lib/loadMapper";
+import { LOAD_SELECT, mapLoadRow, summarize, type LoadRow } from "@/lib/loadMapper";
 import type { DailySummary, Load, LoadFilters } from "@/types/domain";
 
 export type { LoadRow };
-
-const LOAD_SELECT =
-  "id, load_date, vehicle_number, company_id, party_id, weight, rate, driver_advance, gst_enabled, gst_percentage, base_amount, gst_amount, total_amount, created_at, updated_at, companies(name), parties(name)";
 
 export interface LoadActionResult {
   success: boolean;
@@ -27,6 +24,8 @@ interface LoadFormInput {
   partyName: string;
   rate: string;
   driverAdvance: string;
+  vehicleRent: string;
+  dieselCost: string;
   gstMode: "standard" | "custom" | "none";
   customGstPercentage: string;
   loadDate: string;
@@ -36,6 +35,8 @@ async function resolveAndValidate(input: LoadFormInput) {
   const parsed = loadInputSchema.safeParse({
     ...input,
     driverAdvance: input.driverAdvance === "" ? 0 : input.driverAdvance,
+    vehicleRent: input.vehicleRent === "" ? 0 : input.vehicleRent,
+    dieselCost: input.dieselCost === "" ? 0 : input.dieselCost,
     customGstPercentage: input.customGstPercentage === "" ? undefined : input.customGstPercentage,
   });
 
@@ -71,6 +72,8 @@ export async function createLoad(input: LoadFormInput): Promise<LoadActionResult
       weight: resolved.data.weight,
       rate: resolved.data.rate,
       driver_advance: resolved.data.driverAdvance,
+      vehicle_rent: resolved.data.vehicleRent,
+      diesel_cost: resolved.data.dieselCost,
       gst_enabled: resolved.data.gstEnabled,
       gst_percentage: resolved.data.gstPercentage,
     })
@@ -104,6 +107,8 @@ export async function updateLoad(loadId: string, input: LoadFormInput): Promise<
       weight: resolved.data.weight,
       rate: resolved.data.rate,
       driver_advance: resolved.data.driverAdvance,
+      vehicle_rent: resolved.data.vehicleRent,
+      diesel_cost: resolved.data.dieselCost,
       gst_enabled: resolved.data.gstEnabled,
       gst_percentage: resolved.data.gstPercentage,
     })

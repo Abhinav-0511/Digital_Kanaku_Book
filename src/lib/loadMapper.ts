@@ -1,5 +1,8 @@
 import type { DailySummary, Load } from "@/types/domain";
 
+export const LOAD_SELECT =
+  "id, load_date, vehicle_number, company_id, party_id, weight, rate, driver_advance, vehicle_rent, diesel_cost, gst_enabled, gst_percentage, base_amount, gst_amount, total_amount, created_at, updated_at, companies(name), parties(name)";
+
 export interface LoadRow {
   id: string;
   load_date: string;
@@ -9,6 +12,8 @@ export interface LoadRow {
   weight: number;
   rate: number;
   driver_advance: number;
+  vehicle_rent: number;
+  diesel_cost: number;
   gst_enabled: boolean;
   gst_percentage: number;
   base_amount: number;
@@ -37,6 +42,8 @@ export function mapLoadRow(row: LoadRow): Load {
     weight: Number(row.weight),
     rate: Number(row.rate),
     driverAdvance: Number(row.driver_advance),
+    vehicleRent: Number(row.vehicle_rent),
+    dieselCost: Number(row.diesel_cost),
     gstEnabled: row.gst_enabled,
     gstPercentage: Number(row.gst_percentage),
     baseAmount: Number(row.base_amount),
@@ -55,8 +62,19 @@ export function summarize(loads: Load[]): DailySummary {
       totalBaseAmount: acc.totalBaseAmount + l.baseAmount,
       totalGstAmount: acc.totalGstAmount + l.gstAmount,
       totalDriverAdvance: acc.totalDriverAdvance + l.driverAdvance,
+      totalVehicleRent: acc.totalVehicleRent + l.vehicleRent,
+      totalDieselCost: acc.totalDieselCost + l.dieselCost,
       totalAmount: acc.totalAmount + l.totalAmount,
     }),
-    { loadCount: 0, totalWeight: 0, totalBaseAmount: 0, totalGstAmount: 0, totalDriverAdvance: 0, totalAmount: 0 },
+    {
+      loadCount: 0,
+      totalWeight: 0,
+      totalBaseAmount: 0,
+      totalGstAmount: 0,
+      totalDriverAdvance: 0,
+      totalVehicleRent: 0,
+      totalDieselCost: 0,
+      totalAmount: 0,
+    },
   );
 }
