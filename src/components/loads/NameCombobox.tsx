@@ -19,6 +19,8 @@ interface NameComboboxProps {
   search: (query: string) => Promise<NameOption[]>;
   disabled?: boolean;
   error?: boolean;
+  /** Set false for filter/search contexts, where "Add new…" doesn't make sense. */
+  showCreateOption?: boolean;
 }
 
 /**
@@ -27,7 +29,17 @@ interface NameComboboxProps {
  * as-is; the server finds-or-creates the matching company/party by name, so
  * there is no separate "confirm new name" step to get stuck on.
  */
-export function NameCombobox({ id, label, placeholder, value, onChange, search, disabled, error }: NameComboboxProps) {
+export function NameCombobox({
+  id,
+  label,
+  placeholder,
+  value,
+  onChange,
+  search,
+  disabled,
+  error,
+  showCreateOption = true,
+}: NameComboboxProps) {
   const [open, setOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<NameOption[]>([]);
   const debouncedValue = useDebounce(value, 250);
@@ -69,7 +81,7 @@ export function NameCombobox({ id, label, placeholder, value, onChange, search, 
         onFocus={() => setOpen(true)}
         aria-invalid={error}
       />
-      {open && (suggestions.length > 0 || (trimmed && !exactMatch)) ? (
+      {open && (suggestions.length > 0 || (showCreateOption && trimmed && !exactMatch)) ? (
         <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-border bg-popover shadow-md">
           {suggestions.map((option) => (
             <button
@@ -85,7 +97,7 @@ export function NameCombobox({ id, label, placeholder, value, onChange, search, 
               {option.name}
             </button>
           ))}
-          {trimmed && !exactMatch ? (
+          {showCreateOption && trimmed && !exactMatch ? (
             <button
               type="button"
               className="flex w-full items-center gap-2 border-t border-border px-3 py-2.5 text-left text-sm text-primary hover:bg-muted"

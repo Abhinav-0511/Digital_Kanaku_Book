@@ -7,6 +7,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { VehicleInput } from "@/components/loads/VehicleInput";
+import { NameCombobox } from "@/components/loads/NameCombobox";
+import { searchCompanies } from "@/lib/actions/companies";
+import { searchParties } from "@/lib/actions/parties";
+import { dateRangePresets } from "@/lib/formatting/date";
+import { cn } from "@/lib/utils";
 
 const GST_OPTIONS: { value: string; label: string }[] = [
   { value: "all", label: "All" },
@@ -74,17 +80,33 @@ export function FilterPanel({ basePath }: { basePath: string }) {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="filter-vehicle">Vehicle Number</Label>
-              <Input id="filter-vehicle" className="h-11" value={vehicle} onChange={(e) => setVehicle(e.target.value)} placeholder="e.g. TN38AB1234" />
+              <VehicleInput id="filter-vehicle" value={vehicle} onChange={setVehicle} minChars={0} />
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="filter-company">Company</Label>
-              <Input id="filter-company" className="h-11" value={company} onChange={(e) => setCompany(e.target.value)} placeholder="e.g. ABC Logistics" />
+              <NameCombobox
+                id="filter-company"
+                label="Company"
+                placeholder="e.g. ABC Logistics"
+                value={company}
+                onChange={setCompany}
+                search={searchCompanies}
+                showCreateOption={false}
+              />
             </div>
 
             <div className="space-y-1.5">
               <Label htmlFor="filter-party">Party</Label>
-              <Input id="filter-party" className="h-11" value={party} onChange={(e) => setParty(e.target.value)} placeholder="e.g. XYZ Traders" />
+              <NameCombobox
+                id="filter-party"
+                label="Party"
+                placeholder="e.g. XYZ Traders"
+                value={party}
+                onChange={setParty}
+                search={searchParties}
+                showCreateOption={false}
+              />
             </div>
 
             <div className="space-y-1.5">
@@ -100,6 +122,30 @@ export function FilterPanel({ basePath }: { basePath: string }) {
                     }`}
                   >
                     {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Date Range</Label>
+              <div className="grid grid-cols-4 gap-2">
+                {dateRangePresets().map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => {
+                      setFrom(preset.from);
+                      setTo(preset.to);
+                    }}
+                    className={cn(
+                      "h-9 rounded-lg border text-xs font-medium transition-colors",
+                      from === preset.from && to === preset.to
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    {preset.label}
                   </button>
                 ))}
               </div>

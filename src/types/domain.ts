@@ -71,6 +71,22 @@ export interface DailySummary {
   totalAmount: number;
 }
 
+export interface Payment {
+  id: string;
+  paymentDate: string; // YYYY-MM-DD
+  partyId: string;
+  partyName: string;
+  amount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PaymentFilters {
+  dateFrom?: string;
+  dateTo?: string;
+  partyName?: string;
+}
+
 export interface LoadFilters {
   dateFrom?: string;
   dateTo?: string;

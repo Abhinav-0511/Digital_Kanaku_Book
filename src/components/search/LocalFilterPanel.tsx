@@ -6,6 +6,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { VehicleInput } from "@/components/loads/VehicleInput";
+import { NameCombobox } from "@/components/loads/NameCombobox";
+import { searchCompanies } from "@/lib/actions/companies";
+import { searchParties } from "@/lib/actions/parties";
+import { dateRangePresets } from "@/lib/formatting/date";
+import { cn } from "@/lib/utils";
 import type { LoadFilters } from "@/types/domain";
 
 const GST_OPTIONS: { value: NonNullable<LoadFilters["gst"]>; label: string }[] = [
@@ -68,29 +74,35 @@ export function LocalFilterPanel({
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="lf-vehicle">Vehicle Number</Label>
-              <Input
+              <VehicleInput
                 id="lf-vehicle"
-                className="h-11"
                 value={draft.vehicleNumber ?? ""}
-                onChange={(e) => setDraft((d) => ({ ...d, vehicleNumber: e.target.value }))}
+                onChange={(v) => setDraft((d) => ({ ...d, vehicleNumber: v }))}
+                minChars={0}
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="lf-company">Company</Label>
-              <Input
+              <NameCombobox
                 id="lf-company"
-                className="h-11"
+                label="Company"
+                placeholder="e.g. ABC Logistics"
                 value={draft.companyName ?? ""}
-                onChange={(e) => setDraft((d) => ({ ...d, companyName: e.target.value }))}
+                onChange={(v) => setDraft((d) => ({ ...d, companyName: v }))}
+                search={searchCompanies}
+                showCreateOption={false}
               />
             </div>
             <div className="space-y-1.5">
               <Label htmlFor="lf-party">Party</Label>
-              <Input
+              <NameCombobox
                 id="lf-party"
-                className="h-11"
+                label="Party"
+                placeholder="e.g. XYZ Traders"
                 value={draft.partyName ?? ""}
-                onChange={(e) => setDraft((d) => ({ ...d, partyName: e.target.value }))}
+                onChange={(v) => setDraft((d) => ({ ...d, partyName: v }))}
+                search={searchParties}
+                showCreateOption={false}
               />
             </div>
             <div className="space-y-1.5">
@@ -112,6 +124,27 @@ export function LocalFilterPanel({
                 ))}
               </div>
             </div>
+            <div className="space-y-1.5">
+              <Label>Date Range</Label>
+              <div className="grid grid-cols-4 gap-2">
+                {dateRangePresets().map((preset) => (
+                  <button
+                    key={preset.label}
+                    type="button"
+                    onClick={() => setDraft((d) => ({ ...d, dateFrom: preset.from, dateTo: preset.to }))}
+                    className={cn(
+                      "h-9 rounded-lg border text-xs font-medium transition-colors",
+                      draft.dateFrom === preset.from && draft.dateTo === preset.to
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    {preset.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label htmlFor="lf-from">From</Label>

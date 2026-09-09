@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { addDaysIso, formatLongDate, isToday, todayIso } from "@/lib/formatting/date";
 
-export function DateNav({ date }: { date: string }) {
+export function DateNav({ date, basePath = "/loads" }: { date: string; basePath?: string }) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -15,7 +15,7 @@ export function DateNav({ date }: { date: string }) {
     params.set("date", nextDate);
     params.delete("from");
     params.delete("to");
-    router.push(`/loads?${params.toString()}`);
+    router.push(`${basePath}?${params.toString()}`);
   }
 
   return (

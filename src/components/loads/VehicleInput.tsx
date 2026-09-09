@@ -11,16 +11,18 @@ interface VehicleInputProps {
   value: string;
   onChange: (value: string) => void;
   onBlur?: () => void;
+  /** Minimum characters before fetching suggestions. Set 0 to show all previously entered vehicle numbers on focus (e.g. in a filter). */
+  minChars?: number;
   "aria-invalid"?: boolean;
 }
 
-export function VehicleInput({ value, onChange, onBlur, id, ...rest }: VehicleInputProps) {
+export function VehicleInput({ value, onChange, onBlur, id, minChars = 2, ...rest }: VehicleInputProps) {
   const [open, setOpen] = useState(false);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const debouncedValue = useDebounce(value, 250);
   const containerRef = useRef<HTMLDivElement>(null);
 
-  const longEnough = debouncedValue.trim().length >= 2;
+  const longEnough = debouncedValue.trim().length >= minChars;
 
   useEffect(() => {
     if (!longEnough) return;

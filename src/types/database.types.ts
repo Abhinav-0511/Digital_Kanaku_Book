@@ -145,6 +145,38 @@ export interface Database {
           },
         ];
       };
+      payments: {
+        Row: {
+          id: string;
+          user_id: string;
+          payment_date: string;
+          party_id: string;
+          amount: number;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          payment_date?: string;
+          party_id: string;
+          amount: number;
+        };
+        Update: {
+          payment_date?: string;
+          party_id?: string;
+          amount?: number;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "payments_party_id_fkey";
+            columns: ["party_id"];
+            isOneToOne: false;
+            referencedRelation: "parties";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
     };
     Views: Record<string, never>;
     Functions: {

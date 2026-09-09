@@ -187,29 +187,32 @@ export async function searchLoads(filters: LoadFilters): Promise<SearchLoadsResu
 
   const NO_MATCH_ID = "00000000-0000-0000-0000-000000000000";
 
-  if (filters.companyName) {
-    const matches = await supabase
-      .from("companies")
-      .select("id")
-      .ilike("name_normalized", `%${filters.companyName.toLowerCase()}%`);
-    const ids = (matches.data ?? []).map((c) => c.id);
+  const [companyMatches, partyMatches] = await Promise.all([
+    filters.companyName
+      ? supabase.from("companies").select("id").ilike("name_normalized", `%${filters.companyName.toLowerCase()}%`)
+      : null,
+    filters.partyName
+      ? supabase.from("parties").select("id").ilike("name_normalized", `%${filters.partyName.toLowerCase()}%`)
+      : null,
+  ]);
+
+  if (companyMatches) {
+    const ids = (companyMatches.data ?? []).map((c) => c.id);
     query = query.in("company_id", ids.length ? ids : [NO_MATCH_ID]);
   }
 
-  if (filters.partyName) {
-    const matches = await supabase
-      .from("parties")
-      .select("id")
-      .ilike("name_normalized", `%${filters.partyName.toLowerCase()}%`);
-    const ids = (matches.data ?? []).map((p) => p.id);
+  if (partyMatches) {
+    const ids = (partyMatches.data ?? []).map((p) => p.id);
     query = query.in("party_id", ids.length ? ids : [NO_MATCH_ID]);
   }
 
   if (filters.query) {
     const q = filters.query.trim();
     const normalizedVehicle = normalizeVehicleNumber(q);
-    const matchingCompanyIds = await supabase.from("companies").select("id").ilike("name_normalized", `%${q.toLowerCase()}%`);
-    const matchingPartyIds = await supabase.from("parties").select("id").ilike("name_normalized", `%${q.toLowerCase()}%`);
+    const [matchingCompanyIds, matchingPartyIds] = await Promise.all([
+      supabase.from("companies").select("id").ilike("name_normalized", `%${q.toLowerCase()}%`),
+      supabase.from("parties").select("id").ilike("name_normalized", `%${q.toLowerCase()}%`),
+    ]);
 
     const companyIds = (matchingCompanyIds.data ?? []).map((c) => c.id);
     const partyIds = (matchingPartyIds.data ?? []).map((p) => p.id);

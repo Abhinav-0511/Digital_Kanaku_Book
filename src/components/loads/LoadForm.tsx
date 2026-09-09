@@ -241,6 +241,7 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
           id="vehicleNumber"
           value={values.vehicleNumber}
           onChange={(v) => setField("vehicleNumber", v)}
+          minChars={0}
           aria-invalid={Boolean(errors.vehicleNumber)}
         />
       </Field>

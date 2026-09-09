@@ -77,6 +77,40 @@ export function isToday(iso: string): boolean {
   return iso === todayIso();
 }
 
+/** Monday of the week containing `iso` (or today, if omitted), as YYYY-MM-DD. */
+export function startOfWeekIso(iso: string = todayIso()): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d));
+  const day = date.getUTCDay(); // 0 = Sunday
+  const diffToMonday = day === 0 ? -6 : 1 - day;
+  date.setUTCDate(date.getUTCDate() + diffToMonday);
+  return date.toISOString().slice(0, 10);
+}
+
+/** First of the month containing `iso` (or today, if omitted), as YYYY-MM-DD. */
+export function startOfMonthIso(iso: string = todayIso()): string {
+  const [y, m] = iso.split("-").map(Number);
+  return `${y}-${String(m).padStart(2, "0")}-01`;
+}
+
+export interface DateRangePreset {
+  label: string;
+  from: string;
+  to: string;
+}
+
+/** "Today" / "Yesterday" / "This Week" / "This Month" presets for filter panels. */
+export function dateRangePresets(): DateRangePreset[] {
+  const today = todayIso();
+  const yesterday = addDaysIso(today, -1);
+  return [
+    { label: "Today", from: today, to: today },
+    { label: "Yesterday", from: yesterday, to: yesterday },
+    { label: "This Week", from: startOfWeekIso(today), to: today },
+    { label: "This Month", from: startOfMonthIso(today), to: today },
+  ];
+}
+
 export function greetingForNow(): string {
   const hour = Number(
     new Intl.DateTimeFormat("en-IN", { hour: "numeric", hour12: false, timeZone: IST_TIME_ZONE }).format(
