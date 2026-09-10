@@ -36,9 +36,15 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
 
       <DateNav date={date} basePath="/payments" />
 
-      <div className="rounded-xl border border-border bg-card p-4">
-        <p className="text-sm text-muted-foreground">Total received</p>
-        <p className="text-2xl font-bold text-primary">{formatCurrency(summary.totalAmount)}</p>
+      <div className="grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-sm text-muted-foreground">Total Paid</p>
+          <p className="text-xl font-bold text-primary">{formatCurrency(summary.totalPaid)}</p>
+        </div>
+        <div className="rounded-xl border border-border bg-card p-4">
+          <p className="text-sm text-muted-foreground">Total Received</p>
+          <p className="text-xl font-bold text-primary">{formatCurrency(summary.totalReceived)}</p>
+        </div>
       </div>
 
       <PaymentList

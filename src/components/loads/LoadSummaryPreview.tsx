@@ -8,6 +8,10 @@ interface LoadSummaryPreviewProps {
   gstEnabled: boolean;
   gstPercentage: number;
   gstAmount: number;
+  companyRate: number;
+  partyAmount: number;
+  companyAmount: number;
+  difference: number;
   driverAdvance: number;
   vehicleRent: number;
   dieselCost: number;
@@ -22,16 +26,20 @@ export function LoadSummaryPreview({
   gstEnabled,
   gstPercentage,
   gstAmount,
+  companyRate,
+  partyAmount,
+  companyAmount,
+  difference,
   driverAdvance,
   vehicleRent,
   dieselCost,
   totalAmount,
 }: LoadSummaryPreviewProps) {
-  const hasOtherCosts = driverAdvance > 0 || vehicleRent > 0 || dieselCost > 0;
+  const hasOtherCosts = companyRate > 0 || driverAdvance > 0 || vehicleRent > 0 || dieselCost > 0;
 
   return (
     <div className="space-y-2.5 rounded-xl border border-border bg-muted/40 p-4">
-      <Row label={`Weight × Rate`} value={`${formatNumber(weight)} ${weightUnit} × ${formatCurrency(rate)}`} />
+      <Row label={`Weight × Party Rate`} value={`${formatNumber(weight)} ${weightUnit} × ${formatCurrency(rate)}`} />
       <Row label="Base Amount" value={formatCurrency(baseAmount)} />
       <Row label={gstEnabled ? `GST (${formatNumber(gstPercentage)}%)` : "GST"} value={gstEnabled ? formatCurrency(gstAmount) : "No GST"} />
 
@@ -43,6 +51,17 @@ export function LoadSummaryPreview({
       {hasOtherCosts ? (
         <div className="space-y-2.5 border-t border-dashed border-border pt-2.5">
           <p className="text-xs text-muted-foreground">Tracked separately — not included in the total above</p>
+          {companyRate > 0 ? (
+            <>
+              <Row
+                label="Weight × Company Rate"
+                value={`${formatNumber(weight)} ${weightUnit} × ${formatCurrency(companyRate)}`}
+              />
+              <Row label="Party Amount" value={formatCurrency(partyAmount)} />
+              <Row label="Company Amount" value={formatCurrency(companyAmount)} />
+              <Row label="Difference" value={formatCurrency(difference)} />
+            </>
+          ) : null}
           {driverAdvance > 0 ? <Row label="Driver Advance" value={formatCurrency(driverAdvance)} /> : null}
           {vehicleRent > 0 ? <Row label="Vehicle Rent" value={formatCurrency(vehicleRent)} /> : null}
           {dieselCost > 0 ? <Row label="Diesel" value={formatCurrency(dieselCost)} /> : null}

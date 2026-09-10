@@ -14,7 +14,7 @@ export function LoadCard({ load, weightUnit }: { load: Load; weightUnit: string 
         <div className="min-w-0">
           <p className="truncate text-base font-semibold">{load.vehicleNumber}</p>
           <p className="truncate text-sm text-muted-foreground">
-            {load.companyName} → {load.partyName}
+            {load.partyName || "—"} → {load.companyName || "—"}
           </p>
         </div>
         {load.gstEnabled ? (

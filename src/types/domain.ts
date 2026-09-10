@@ -27,12 +27,13 @@ export interface Load {
   id: string;
   loadDate: string; // YYYY-MM-DD
   vehicleNumber: string;
-  companyId: string;
+  companyId: string | null;
   companyName: string;
-  partyId: string;
+  partyId: string | null;
   partyName: string;
   weight: number;
   rate: number;
+  companyRate: number;
   driverAdvance: number;
   vehicleRent: number;
   dieselCost: number;
@@ -53,6 +54,7 @@ export interface LoadFormValues {
   partyId: string | null;
   partyName: string;
   rate: string;
+  companyRate: string;
   driverAdvance: string;
   vehicleRent: string;
   dieselCost: string;
@@ -64,6 +66,10 @@ export interface DailySummary {
   loadCount: number;
   totalWeight: number;
   totalBaseAmount: number;
+  /** Sum of per-load party amounts (paid), GST-inclusive, 0 where party is blank/"Myself". */
+  totalPartyAmount: number;
+  /** Sum of per-load company amounts (received), GST-inclusive, 0 where company is blank/"Godown". */
+  totalCompanyAmount: number;
   totalGstAmount: number;
   totalDriverAdvance: number;
   totalVehicleRent: number;
@@ -71,11 +77,16 @@ export interface DailySummary {
   totalAmount: number;
 }
 
+export type PaymentType = "paid" | "received";
+
 export interface Payment {
   id: string;
   paymentDate: string; // YYYY-MM-DD
-  partyId: string;
+  paymentType: PaymentType;
+  partyId: string | null;
   partyName: string;
+  companyId: string | null;
+  companyName: string;
   amount: number;
   createdAt: string;
   updatedAt: string;
@@ -85,6 +96,7 @@ export interface PaymentFilters {
   dateFrom?: string;
   dateTo?: string;
   partyName?: string;
+  companyName?: string;
 }
 
 export interface LoadFilters {

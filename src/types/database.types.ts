@@ -83,10 +83,11 @@ export interface Database {
           load_date: string;
           vehicle_number: string;
           vehicle_number_normalized: string;
-          company_id: string;
-          party_id: string;
+          company_id: string | null;
+          party_id: string | null;
           weight: number;
           rate: number;
+          company_rate: number;
           driver_advance: number;
           vehicle_rent: number;
           diesel_cost: number;
@@ -104,10 +105,11 @@ export interface Database {
           load_date?: string;
           vehicle_number: string;
           vehicle_number_normalized: string;
-          company_id: string;
-          party_id: string;
+          company_id?: string | null;
+          party_id?: string | null;
           weight: number;
           rate: number;
+          company_rate?: number;
           driver_advance?: number;
           vehicle_rent?: number;
           diesel_cost?: number;
@@ -118,10 +120,11 @@ export interface Database {
           load_date?: string;
           vehicle_number?: string;
           vehicle_number_normalized?: string;
-          company_id?: string;
-          party_id?: string;
+          company_id?: string | null;
+          party_id?: string | null;
           weight?: number;
           rate?: number;
+          company_rate?: number;
           driver_advance?: number;
           vehicle_rent?: number;
           diesel_cost?: number;
@@ -150,7 +153,9 @@ export interface Database {
           id: string;
           user_id: string;
           payment_date: string;
-          party_id: string;
+          party_id: string | null;
+          company_id: string | null;
+          payment_type: "paid" | "received";
           amount: number;
           created_at: string;
           updated_at: string;
@@ -159,12 +164,16 @@ export interface Database {
           id?: string;
           user_id: string;
           payment_date?: string;
-          party_id: string;
+          party_id?: string | null;
+          company_id?: string | null;
+          payment_type?: "paid" | "received";
           amount: number;
         };
         Update: {
           payment_date?: string;
-          party_id?: string;
+          party_id?: string | null;
+          company_id?: string | null;
+          payment_type?: "paid" | "received";
           amount?: number;
         };
         Relationships: [
@@ -173,6 +182,13 @@ export interface Database {
             columns: ["party_id"];
             isOneToOne: false;
             referencedRelation: "parties";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "payments_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "companies";
             referencedColumns: ["id"];
           },
         ];

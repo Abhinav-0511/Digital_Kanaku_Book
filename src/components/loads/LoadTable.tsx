@@ -15,7 +15,7 @@ export function LoadTable({ loads, weightUnit }: { loads: Load[]; weightUnit: st
             <th className="px-4 py-3">Company</th>
             <th className="px-4 py-3">Party</th>
             <th className="px-4 py-3 text-right">Weight</th>
-            <th className="px-4 py-3 text-right">Rate</th>
+            <th className="px-4 py-3 text-right">Party Rate</th>
             <th className="px-4 py-3">GST</th>
             <th className="px-4 py-3 text-right">Total</th>
           </tr>
@@ -29,8 +29,8 @@ export function LoadTable({ loads, weightUnit }: { loads: Load[]; weightUnit: st
                   {load.vehicleNumber}
                 </Link>
               </td>
-              <td className="px-4 py-3">{load.companyName}</td>
-              <td className="px-4 py-3">{load.partyName}</td>
+              <td className="px-4 py-3">{load.companyName || "—"}</td>
+              <td className="px-4 py-3">{load.partyName || "—"}</td>
               <td className="px-4 py-3 text-right">
                 {formatNumber(load.weight)} {weightUnit}
               </td>

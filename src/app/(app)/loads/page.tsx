@@ -62,7 +62,7 @@ export default async function LoadsPage({ searchParams }: LoadsPageProps) {
         <FilterPanel basePath="/loads" />
       </div>
 
-      <SummaryCards summary={summary} weightUnit={weightUnit} dateLabel={rangeMode ? "Loads" : "Today"} />
+      <SummaryCards summary={summary} weightUnit={weightUnit} dateLabel={rangeMode ? "Loads" : "Today"} showAmountBreakdown />
 
       <LoadList
         loads={loads}

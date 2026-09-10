@@ -25,6 +25,57 @@ export function round2(value: number): number {
   return cents / 100;
 }
 
+export interface LoadAmountBreakdownInput {
+  weight: number;
+  rate: number;
+  companyRate: number;
+  gstEnabled: boolean;
+  gstPercentage: number;
+  partyName: string;
+  companyName: string;
+}
+
+export interface LoadAmountBreakdownResult {
+  /** Amount paid to the party for this load (rate × weight + GST). Zero when partyName is blank or "Myself". */
+  partyAmount: number;
+  /** Amount received from the company for this load (companyRate × weight + GST). Zero when companyName is blank or "Godown". */
+  companyAmount: number;
+  /** Profit on this load: companyAmount − partyAmount. */
+  difference: number;
+}
+
+function isSentinelOrBlank(name: string, sentinel: string): boolean {
+  const trimmed = name.trim().toLowerCase();
+  return trimmed === "" || trimmed === sentinel;
+}
+
+/**
+ * Party amount is money paid out (cost), company amount is money received
+ * (revenue) — both weight × rate + GST, using the load's own GST settings.
+ * A load with no real party (blank or "Myself" — e.g. self-use, no payout)
+ * has no cost, so partyAmount is 0. A load with no real company (blank or
+ * "Godown" — e.g. an internal transfer, no billing) has no revenue, so
+ * companyAmount is 0. The difference is the profit earned on the load.
+ */
+export function calculateLoadAmountBreakdown({
+  weight,
+  rate,
+  companyRate,
+  gstEnabled,
+  gstPercentage,
+  partyName,
+  companyName,
+}: LoadAmountBreakdownInput): LoadAmountBreakdownResult {
+  const partyTotal = calculateLoadAmounts({ weight, rate, gstEnabled, gstPercentage }).totalAmount;
+  const companyTotal = calculateLoadAmounts({ weight, rate: companyRate, gstEnabled, gstPercentage }).totalAmount;
+
+  const partyAmount = isSentinelOrBlank(partyName, "myself") ? 0 : partyTotal;
+  const companyAmount = isSentinelOrBlank(companyName, "godown") ? 0 : companyTotal;
+  const difference = round2(companyAmount - partyAmount);
+
+  return { partyAmount, companyAmount, difference };
+}
+
 export function calculateLoadAmounts({
   weight,
   rate,

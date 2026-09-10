@@ -3,23 +3,33 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { LoadingButton } from "@/components/common/LoadingButton";
 import { NameCombobox } from "@/components/loads/NameCombobox";
+import { searchCompanies } from "@/lib/actions/companies";
 import { searchParties } from "@/lib/actions/parties";
 import { createPayment } from "@/lib/actions/payments";
 import { todayIso } from "@/lib/formatting/date";
+import type { PaymentType } from "@/types/domain";
 
 interface FormState {
+  paymentType: PaymentType;
+  companyName: string;
   partyName: string;
   amount: string;
   paymentDate: string;
 }
 
 function initialState(): FormState {
-  return { partyName: "", amount: "", paymentDate: todayIso() };
+  return { paymentType: "paid", companyName: "", partyName: "", amount: "", paymentDate: todayIso() };
 }
+
+const PAYMENT_TYPE_OPTIONS: { value: PaymentType; label: string }[] = [
+  { value: "paid", label: "Paid" },
+  { value: "received", label: "Received" },
+];
 
 export function PaymentForm() {
   const router = useRouter();
@@ -36,8 +46,8 @@ export function PaymentForm() {
   function validate(): boolean {
     const nextErrors: Partial<Record<keyof FormState, string>> = {};
 
-    if (!values.partyName.trim()) {
-      nextErrors.partyName = "Select or enter a party.";
+    if (!values.companyName.trim() && !values.partyName.trim()) {
+      nextErrors.partyName = "Enter a company or a party.";
     }
     const amount = Number(values.amount);
     if (!values.amount || !Number.isFinite(amount) || amount <= 0) {
@@ -98,7 +108,39 @@ export function PaymentForm() {
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5 pb-24 md:pb-6" noValidate>
-      <Field label="Party" htmlFor="partyName" error={errors.partyName}>
+      <div className="space-y-2">
+        <Label>Amount Paid or Received</Label>
+        <div className="grid grid-cols-2 gap-2">
+          {PAYMENT_TYPE_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              onClick={() => setField("paymentType", option.value)}
+              className={cn(
+                "h-11 rounded-lg border text-sm font-medium transition-colors",
+                values.paymentType === option.value
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border bg-background text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <Field label="Company (optional)" htmlFor="companyName">
+        <NameCombobox
+          id="companyName"
+          label="Company"
+          placeholder="Type or select a company"
+          value={values.companyName}
+          onChange={(v) => setField("companyName", v)}
+          search={searchCompanies}
+        />
+      </Field>
+
+      <Field label="Party (optional)" htmlFor="partyName" error={errors.partyName}>
         <NameCombobox
           id="partyName"
           label="Party"
@@ -110,7 +152,7 @@ export function PaymentForm() {
         />
       </Field>
 
-      <Field label="Amount Paid" htmlFor="amount" error={errors.amount}>
+      <Field label="Amount" htmlFor="amount" error={errors.amount}>
         <div className="relative">
           <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
           <Input

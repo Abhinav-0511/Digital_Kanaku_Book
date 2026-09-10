@@ -2,11 +2,34 @@ import { Card } from "@/components/ui/card";
 import { formatCurrencyWhole, formatNumber } from "@/lib/formatting/currency";
 import type { DailySummary } from "@/types/domain";
 
-export function SummaryCards({ summary, weightUnit, dateLabel }: { summary: DailySummary; weightUnit: string; dateLabel: string }) {
+export function SummaryCards({
+  summary,
+  weightUnit,
+  dateLabel,
+  showAmountBreakdown = false,
+}: {
+  summary: DailySummary;
+  weightUnit: string;
+  dateLabel: string;
+  showAmountBreakdown?: boolean;
+}) {
+  const amountCards: { label: string; value: string; suffix: string; emphasize?: boolean }[] = showAmountBreakdown
+    ? [
+        { label: "Party Amount", value: formatCurrencyWhole(summary.totalPartyAmount), suffix: "", emphasize: true },
+        { label: "Company Amount", value: formatCurrencyWhole(summary.totalCompanyAmount), suffix: "", emphasize: true },
+        {
+          label: "Difference",
+          value: formatCurrencyWhole(summary.totalCompanyAmount - summary.totalPartyAmount),
+          suffix: "",
+          emphasize: true,
+        },
+      ]
+    : [{ label: "Total Amount", value: formatCurrencyWhole(summary.totalAmount), suffix: "", emphasize: true }];
+
   const cards = [
     { label: dateLabel, value: `${summary.loadCount}`, suffix: summary.loadCount === 1 ? "Load" : "Loads" },
     { label: "Total Weight", value: `${formatNumber(summary.totalWeight)}`, suffix: weightUnit },
-    { label: "Total Amount", value: formatCurrencyWhole(summary.totalAmount), suffix: "", emphasize: true },
+    ...amountCards,
     { label: "Driver Advance", value: formatCurrencyWhole(summary.totalDriverAdvance), suffix: "" },
     { label: "Vehicle Rent", value: formatCurrencyWhole(summary.totalVehicleRent), suffix: "" },
     { label: "Diesel", value: formatCurrencyWhole(summary.totalDieselCost), suffix: "" },

@@ -23,6 +23,7 @@ interface LoadFormInput {
   companyName: string;
   partyName: string;
   rate: string;
+  companyRate: string;
   driverAdvance: string;
   vehicleRent: string;
   dieselCost: string;
@@ -34,6 +35,8 @@ interface LoadFormInput {
 async function resolveAndValidate(input: LoadFormInput) {
   const parsed = loadInputSchema.safeParse({
     ...input,
+    rate: input.rate === "" ? 0 : input.rate,
+    companyRate: input.companyRate === "" ? 0 : input.companyRate,
     driverAdvance: input.driverAdvance === "" ? 0 : input.driverAdvance,
     vehicleRent: input.vehicleRent === "" ? 0 : input.vehicleRent,
     dieselCost: input.dieselCost === "" ? 0 : input.dieselCost,
@@ -45,13 +48,18 @@ async function resolveAndValidate(input: LoadFormInput) {
   }
 
   const [company, party] = await Promise.all([
-    findOrCreateLookup("companies", parsed.data.companyName),
-    findOrCreateLookup("parties", parsed.data.partyName),
+    parsed.data.companyName.trim() ? findOrCreateLookup("companies", parsed.data.companyName) : null,
+    parsed.data.partyName.trim() ? findOrCreateLookup("parties", parsed.data.partyName) : null,
   ]);
-  if (!company.success) return { success: false as const, error: company.error };
-  if (!party.success) return { success: false as const, error: party.error };
+  if (company && !company.success) return { success: false as const, error: company.error };
+  if (party && !party.success) return { success: false as const, error: party.error };
 
-  return { success: true as const, data: parsed.data, companyId: company.id, partyId: party.id };
+  return {
+    success: true as const,
+    data: parsed.data,
+    companyId: company?.success ? company.id : null,
+    partyId: party?.success ? party.id : null,
+  };
 }
 
 export async function createLoad(input: LoadFormInput): Promise<LoadActionResult> {
@@ -71,6 +79,7 @@ export async function createLoad(input: LoadFormInput): Promise<LoadActionResult
       party_id: resolved.partyId,
       weight: resolved.data.weight,
       rate: resolved.data.rate,
+      company_rate: resolved.data.companyRate,
       driver_advance: resolved.data.driverAdvance,
       vehicle_rent: resolved.data.vehicleRent,
       diesel_cost: resolved.data.dieselCost,
@@ -106,6 +115,7 @@ export async function updateLoad(loadId: string, input: LoadFormInput): Promise<
       party_id: resolved.partyId,
       weight: resolved.data.weight,
       rate: resolved.data.rate,
+      company_rate: resolved.data.companyRate,
       driver_advance: resolved.data.driverAdvance,
       vehicle_rent: resolved.data.vehicleRent,
       diesel_cost: resolved.data.dieselCost,

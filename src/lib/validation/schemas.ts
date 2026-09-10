@@ -46,9 +46,10 @@ export const loadInputSchema = z
   .object({
     weight: z.coerce.number({ message: "Enter a valid weight" }).positive("Enter a valid weight greater than 0"),
     vehicleNumber: z.string().trim().min(1, "Vehicle number is required").max(20, "Vehicle number is too long"),
-    companyName: z.string().trim().min(1, "Select or enter a company").max(100, "Company name is too long"),
-    partyName: z.string().trim().min(1, "Select or enter a party").max(100, "Party name is too long"),
-    rate: z.coerce.number({ message: "Enter a valid rate" }).min(0, "Rate cannot be negative"),
+    companyName: z.string().trim().max(100, "Company name is too long").optional().default(""),
+    partyName: z.string().trim().max(100, "Party name is too long").optional().default(""),
+    rate: z.coerce.number().min(0, "Party rate cannot be negative").default(0),
+    companyRate: z.coerce.number().min(0, "Company rate cannot be negative").default(0),
     driverAdvance: z.coerce.number().min(0, "Driver advance cannot be negative").default(0),
     vehicleRent: z.coerce.number().min(0, "Vehicle rent cannot be negative").default(0),
     dieselCost: z.coerce.number().min(0, "Diesel cost cannot be negative").default(0),
@@ -68,16 +69,29 @@ export const loadInputSchema = z
   .refine((data) => data.gstMode !== "custom" || data.customGstPercentage !== undefined, {
     message: "Enter a GST percentage between 0 and 100",
     path: ["customGstPercentage"],
+  })
+  .refine((data) => data.companyName.trim() !== "" || data.partyName.trim() !== "", {
+    message: "Enter a company or a party.",
+    path: ["partyName"],
   });
 
 export type LoadInput = z.infer<typeof loadInputSchema>;
 
 export const nameEntrySchema = z.string().trim().min(1, "Required").max(100, "Too long");
 
-export const paymentInputSchema = z.object({
-  partyName: z.string().trim().min(1, "Select or enter a party").max(100, "Party name is too long"),
-  amount: z.coerce.number({ message: "Enter a valid amount" }).positive("Enter an amount greater than 0"),
-  paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
-});
+export const paymentTypeSchema = z.enum(["paid", "received"]);
+
+export const paymentInputSchema = z
+  .object({
+    paymentType: paymentTypeSchema,
+    companyName: z.string().trim().max(100, "Company name is too long").optional().default(""),
+    partyName: z.string().trim().max(100, "Party name is too long").optional().default(""),
+    amount: z.coerce.number({ message: "Enter a valid amount" }).positive("Enter an amount greater than 0"),
+    paymentDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Invalid date"),
+  })
+  .refine((data) => data.companyName.trim() !== "" || data.partyName.trim() !== "", {
+    message: "Enter a company or a party.",
+    path: ["partyName"],
+  });
 
 export type PaymentInput = z.infer<typeof paymentInputSchema>;

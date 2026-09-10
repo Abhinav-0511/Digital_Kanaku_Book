@@ -10,7 +10,7 @@ import { NameCombobox } from "./NameCombobox";
 import { VehicleInput } from "./VehicleInput";
 import { GstSelector } from "./GstSelector";
 import { LoadSummaryPreview } from "./LoadSummaryPreview";
-import { calculateLoadAmounts } from "@/lib/calculations/loadCalculations";
+import { calculateLoadAmounts, calculateLoadAmountBreakdown } from "@/lib/calculations/loadCalculations";
 import { searchCompanies } from "@/lib/actions/companies";
 import { searchParties } from "@/lib/actions/parties";
 import { createLoad, updateLoad } from "@/lib/actions/loads";
@@ -23,6 +23,7 @@ interface FormState {
   companyName: string;
   partyName: string;
   rate: string;
+  companyRate: string;
   driverAdvance: string;
   vehicleRent: string;
   dieselCost: string;
@@ -39,6 +40,7 @@ function initialStateFromLoad(load?: Load): FormState {
       companyName: "",
       partyName: "",
       rate: "",
+      companyRate: "",
       driverAdvance: "",
       vehicleRent: "",
       dieselCost: "",
@@ -59,6 +61,7 @@ function initialStateFromLoad(load?: Load): FormState {
     companyName: load.companyName,
     partyName: load.partyName,
     rate: String(load.rate),
+    companyRate: load.companyRate ? String(load.companyRate) : "",
     driverAdvance: load.driverAdvance ? String(load.driverAdvance) : "",
     vehicleRent: load.vehicleRent ? String(load.vehicleRent) : "",
     dieselCost: load.dieselCost ? String(load.dieselCost) : "",
@@ -90,13 +93,38 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
   const preview = useMemo(() => {
     const weight = Number(values.weight);
     const rate = Number(values.rate);
+    const companyRate = Number(values.companyRate || 0);
     const gstEnabled = values.gstMode !== "none";
     const gstPercentage = values.gstMode === "standard" ? 18 : values.gstMode === "custom" ? Number(values.customGstPercentage || 0) : 0;
     const driverAdvance = Number(values.driverAdvance || 0);
     const vehicleRent = Number(values.vehicleRent || 0);
     const dieselCost = Number(values.dieselCost || 0);
     const { baseAmount, gstAmount, totalAmount } = calculateLoadAmounts({ weight, rate, gstEnabled, gstPercentage });
-    return { weight, rate, gstEnabled, gstPercentage, driverAdvance, vehicleRent, dieselCost, baseAmount, gstAmount, totalAmount };
+    const { partyAmount, companyAmount, difference } = calculateLoadAmountBreakdown({
+      weight,
+      rate,
+      companyRate,
+      gstEnabled,
+      gstPercentage,
+      partyName: values.partyName,
+      companyName: values.companyName,
+    });
+    return {
+      weight,
+      rate,
+      companyRate,
+      partyAmount,
+      companyAmount,
+      difference,
+      gstEnabled,
+      gstPercentage,
+      driverAdvance,
+      vehicleRent,
+      dieselCost,
+      baseAmount,
+      gstAmount,
+      totalAmount,
+    };
   }, [values]);
 
   function validate(): boolean {
@@ -109,15 +137,20 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
     if (!values.vehicleNumber.trim()) {
       nextErrors.vehicleNumber = "Vehicle number is required.";
     }
-    if (!values.companyName.trim()) {
-      nextErrors.companyName = "Select or enter a company.";
+    if (!values.companyName.trim() && !values.partyName.trim()) {
+      nextErrors.partyName = "Enter a company or a party.";
     }
-    if (!values.partyName.trim()) {
-      nextErrors.partyName = "Select or enter a party.";
+    if (values.rate) {
+      const rate = Number(values.rate);
+      if (!Number.isFinite(rate) || rate < 0) {
+        nextErrors.rate = "Party rate cannot be negative.";
+      }
     }
-    const rate = Number(values.rate);
-    if (values.rate === "" || !Number.isFinite(rate) || rate < 0) {
-      nextErrors.rate = "Rate cannot be negative.";
+    if (values.companyRate) {
+      const companyRate = Number(values.companyRate);
+      if (!Number.isFinite(companyRate) || companyRate < 0) {
+        nextErrors.companyRate = "Company rate cannot be negative.";
+      }
     }
     if (values.driverAdvance) {
       const advance = Number(values.driverAdvance);
@@ -160,6 +193,7 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
       companyName: values.companyName,
       partyName: values.partyName,
       rate: values.rate,
+      companyRate: values.companyRate,
       driverAdvance: values.driverAdvance,
       vehicleRent: values.vehicleRent,
       dieselCost: values.dieselCost,
@@ -258,6 +292,15 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
         />
       </Field>
 
+      <Field label="Company Rate" htmlFor="companyRate" error={errors.companyRate}>
+        <MoneyInput
+          id="companyRate"
+          value={values.companyRate}
+          onChange={(v) => setField("companyRate", v)}
+          error={Boolean(errors.companyRate)}
+        />
+      </Field>
+
       <Field label="Party" htmlFor="partyName" error={errors.partyName}>
         <NameCombobox
           id="partyName"
@@ -270,22 +313,8 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
         />
       </Field>
 
-      <Field label="Rate" htmlFor="rate" error={errors.rate}>
-        <div className="relative">
-          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
-          <Input
-            id="rate"
-            inputMode="decimal"
-            type="number"
-            min={0}
-            step="0.01"
-            placeholder="0.00"
-            className="h-11 pl-7 text-base"
-            value={values.rate}
-            onChange={(e) => setField("rate", e.target.value)}
-            aria-invalid={Boolean(errors.rate)}
-          />
-        </div>
+      <Field label="Party Rate" htmlFor="rate" error={errors.rate}>
+        <MoneyInput id="rate" value={values.rate} onChange={(v) => setField("rate", v)} error={Boolean(errors.rate)} />
       </Field>
 
       <Field label="Driver Advance (optional)" htmlFor="driverAdvance" error={errors.driverAdvance}>
@@ -342,6 +371,10 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
         gstEnabled={preview.gstEnabled}
         gstPercentage={preview.gstPercentage}
         gstAmount={preview.gstAmount}
+        companyRate={preview.companyRate}
+        partyAmount={preview.partyAmount}
+        companyAmount={preview.companyAmount}
+        difference={preview.difference}
         driverAdvance={preview.driverAdvance}
         vehicleRent={preview.vehicleRent}
         dieselCost={preview.dieselCost}

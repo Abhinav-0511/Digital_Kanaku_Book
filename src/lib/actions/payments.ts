@@ -5,7 +5,7 @@ import { createClient, getAuthedUser } from "@/lib/supabase/server";
 import { friendlyErrorMessage, logServerError } from "@/lib/errors";
 import { paymentInputSchema } from "@/lib/validation/schemas";
 import { findOrCreateLookup } from "./_lookups";
-import { PAYMENT_SELECT, mapPaymentRow, summarizePayments, type PaymentRow } from "@/lib/paymentMapper";
+import { PAYMENT_SELECT, mapPaymentRow, summarizePayments, type PaymentRow, type PaymentSummary } from "@/lib/paymentMapper";
 import type { Payment, PaymentFilters } from "@/types/domain";
 
 export type { PaymentRow };
@@ -17,6 +17,8 @@ export interface PaymentActionResult {
 }
 
 interface PaymentFormInput {
+  paymentType: "paid" | "received";
+  companyName: string;
   partyName: string;
   amount: string;
   paymentDate: string;
@@ -28,8 +30,13 @@ export async function createPayment(input: PaymentFormInput): Promise<PaymentAct
     return { success: false, error: parsed.error.issues[0]?.message ?? "Please check your details." };
   }
 
-  const [party, user] = await Promise.all([findOrCreateLookup("parties", parsed.data.partyName), getAuthedUser()]);
-  if (!party.success) return { success: false, error: party.error };
+  const [company, party, user] = await Promise.all([
+    parsed.data.companyName.trim() ? findOrCreateLookup("companies", parsed.data.companyName) : null,
+    parsed.data.partyName.trim() ? findOrCreateLookup("parties", parsed.data.partyName) : null,
+    getAuthedUser(),
+  ]);
+  if (company && !company.success) return { success: false, error: company.error };
+  if (party && !party.success) return { success: false, error: party.error };
   if (!user) return { success: false, error: "You need to be logged in." };
 
   const supabase = await createClient();
@@ -38,7 +45,9 @@ export async function createPayment(input: PaymentFormInput): Promise<PaymentAct
     .insert({
       user_id: user.id,
       payment_date: parsed.data.paymentDate,
-      party_id: party.id,
+      payment_type: parsed.data.paymentType,
+      company_id: company?.success ? company.id : null,
+      party_id: party?.success ? party.id : null,
       amount: parsed.data.amount,
     })
     .select("id")
@@ -88,7 +97,7 @@ export async function getPaymentsForDate(date: string): Promise<Payment[]> {
 
 export interface SearchPaymentsResult {
   payments: Payment[];
-  summary: { paymentCount: number; totalAmount: number };
+  summary: PaymentSummary;
 }
 
 export async function searchPayments(filters: PaymentFilters): Promise<SearchPaymentsResult> {
@@ -98,14 +107,24 @@ export async function searchPayments(filters: PaymentFilters): Promise<SearchPay
   if (filters.dateFrom) query = query.gte("payment_date", filters.dateFrom);
   if (filters.dateTo) query = query.lte("payment_date", filters.dateTo);
 
+  const NO_MATCH_ID = "00000000-0000-0000-0000-000000000000";
+
   if (filters.partyName) {
-    const NO_MATCH_ID = "00000000-0000-0000-0000-000000000000";
     const matches = await supabase
       .from("parties")
       .select("id")
       .ilike("name_normalized", `%${filters.partyName.toLowerCase()}%`);
     const ids = (matches.data ?? []).map((p) => p.id);
     query = query.in("party_id", ids.length ? ids : [NO_MATCH_ID]);
+  }
+
+  if (filters.companyName) {
+    const matches = await supabase
+      .from("companies")
+      .select("id")
+      .ilike("name_normalized", `%${filters.companyName.toLowerCase()}%`);
+    const ids = (matches.data ?? []).map((c) => c.id);
+    query = query.in("company_id", ids.length ? ids : [NO_MATCH_ID]);
   }
 
   const { data, error } = await query.order("payment_date", { ascending: false }).order("created_at", { ascending: false }).limit(200);

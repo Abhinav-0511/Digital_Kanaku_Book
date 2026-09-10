@@ -3,9 +3,11 @@ import { notFound } from "next/navigation";
 import { Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { BackLink } from "@/components/common/BackLink";
 import { ConfirmDeleteDialog } from "@/components/loads/ConfirmDeleteDialog";
 import { getLoad } from "@/lib/actions/loads";
 import { getCurrentProfile } from "@/lib/actions/profile";
+import { calculateLoadAmountBreakdown } from "@/lib/calculations/loadCalculations";
 import { formatCurrency, formatNumber } from "@/lib/formatting/currency";
 import { formatDateTime, formatLongDate } from "@/lib/formatting/date";
 
@@ -15,9 +17,20 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
 
   if (!load) notFound();
   const weightUnit = profile?.weightUnit ?? "kg";
+  const { partyAmount, companyAmount, difference } = calculateLoadAmountBreakdown({
+    weight: load.weight,
+    rate: load.rate,
+    companyRate: load.companyRate,
+    gstEnabled: load.gstEnabled,
+    gstPercentage: load.gstPercentage,
+    partyName: load.partyName,
+    companyName: load.companyName,
+  });
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
+      <BackLink href="/loads" label="Back to Loads" />
+
       <div className="flex items-start justify-between gap-3">
         <div>
           <Link href={`/vehicles/${encodeURIComponent(load.vehicleNumber)}`} className="text-xl font-semibold hover:underline">
@@ -41,11 +54,11 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
         </div>
 
         <dl className="mt-4 divide-y divide-border text-sm">
-          <Row label="Company" value={load.companyName} href={`/companies/${load.companyId}`} />
-          <Row label="Party" value={load.partyName} href={`/parties/${load.partyId}`} />
-          <Row label="Weight" value={`${formatNumber(load.weight)} ${weightUnit}`} />
-          <Row label="Rate" value={formatCurrency(load.rate)} />
-          <Row label="Base Amount" value={formatCurrency(load.baseAmount)} />
+          <Row label="Weight" value={`${formatNumber(load.weight)} ${weightUnit}`} emphasize />
+          <Row label="Company" value={load.companyName || "—"} href={load.companyId ? `/companies/${load.companyId}` : undefined} />
+          <Row label="Company Rate" value={formatCurrency(load.companyRate)} />
+          <Row label="Party" value={load.partyName || "—"} href={load.partyId ? `/parties/${load.partyId}` : undefined} />
+          <Row label="Party Rate" value={formatCurrency(load.rate)} />
           <Row label="GST Type" value={load.gstEnabled ? "Applied" : "No GST"} />
           {load.gstEnabled ? <Row label="GST Percentage" value={`${formatNumber(load.gstPercentage)}%`} /> : null}
           <Row label="GST Amount" value={formatCurrency(load.gstAmount)} />
@@ -55,6 +68,12 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
           <Row label="Created At" value={formatDateTime(load.createdAt)} />
           <Row label="Last Updated" value={formatDateTime(load.updatedAt)} />
         </dl>
+
+        <div className="mt-4 space-y-2 border-t border-border pt-4">
+          <AmountRow label="Party Amount" value={formatCurrency(partyAmount)} />
+          <AmountRow label="Company Amount" value={formatCurrency(companyAmount)} />
+          <AmountRow label="Difference" value={formatCurrency(difference)} />
+        </div>
       </div>
 
       <div className="flex gap-3">
@@ -75,11 +94,30 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
   );
 }
 
-function Row({ label, value, href }: { label: string; value: string; href?: string }) {
+function AmountRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between py-1">
+      <span className="text-base text-muted-foreground">{label}</span>
+      <span className="text-lg font-semibold text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function Row({
+  label,
+  value,
+  href,
+  emphasize,
+}: {
+  label: string;
+  value: string;
+  href?: string;
+  emphasize?: boolean;
+}) {
   return (
     <div className="flex items-center justify-between py-2.5">
       <dt className="text-muted-foreground">{label}</dt>
-      <dd className="font-medium">
+      <dd className={emphasize ? "text-base font-bold text-foreground" : "font-medium"}>
         {href ? (
           <Link href={href} className="text-primary hover:underline">
             {value}
