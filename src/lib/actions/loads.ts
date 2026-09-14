@@ -1,11 +1,12 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { createClient, getAuthedUser } from "@/lib/supabase/server";
+import { unstable_cache, revalidatePath, revalidateTag } from "next/cache";
+import { createClient, createTokenClient, getAccessToken, getAuthedUser } from "@/lib/supabase/server";
 import { friendlyErrorMessage, logServerError } from "@/lib/errors";
 import { loadInputSchema, vehicleNumberSchema } from "@/lib/validation/schemas";
 import { normalizeVehicleNumber } from "@/lib/formatting/vehicle";
 import { escapeLikePattern, findOrCreateLookup, type RenameResult } from "./_lookups";
+import { cacheTags, CACHE_TTL_SECONDS } from "@/lib/cache/tags";
 import { LOAD_SELECT, mapLoadRow, summarize, type LoadRow } from "@/lib/loadMapper";
 import type { DailySummary, HistoryFilters, Load, LoadFilters } from "@/types/domain";
 
@@ -62,6 +63,16 @@ async function resolveAndValidate(input: LoadFormInput) {
   };
 }
 
+/** Every save invalidates companies/parties too, not just loads — saving
+ * can silently create a brand-new company/party (find-or-create), and this
+ * runs regardless of whether that actually happened this time; a spurious
+ * cache miss is cheap, a missed invalidation is a wrong number on screen. */
+function invalidateLoadCaches(userId: string) {
+  revalidateTag(cacheTags.loads(userId), { expire: 0 });
+  revalidateTag(cacheTags.companies(userId), { expire: 0 });
+  revalidateTag(cacheTags.parties(userId), { expire: 0 });
+}
+
 export async function createLoad(input: LoadFormInput): Promise<LoadActionResult> {
   const [resolved, user] = await Promise.all([resolveAndValidate(input), getAuthedUser()]);
   if (!resolved.success) return { success: false, error: resolved.error };
@@ -94,6 +105,7 @@ export async function createLoad(input: LoadFormInput): Promise<LoadActionResult
     return { success: false, error: friendlyErrorMessage(error, "Couldn't save this load. Please check your details and try again.") };
   }
 
+  invalidateLoadCaches(user.id);
   revalidatePath("/dashboard");
   revalidatePath("/loads");
   return { success: true, loadId: data.id };
@@ -130,6 +142,7 @@ export async function updateLoad(loadId: string, input: LoadFormInput): Promise<
     return { success: false, error: friendlyErrorMessage(error, "Couldn't update this load. Please check your details and try again.") };
   }
 
+  invalidateLoadCaches(user.id);
   revalidatePath("/dashboard");
   revalidatePath("/loads");
   revalidatePath(`/loads/${loadId}`);
@@ -148,11 +161,15 @@ export async function deleteLoad(loadId: string): Promise<LoadActionResult> {
     return { success: false, error: friendlyErrorMessage(error, "Couldn't delete this load. Please try again.") };
   }
 
+  revalidateTag(cacheTags.loads(user.id), { expire: 0 });
   revalidatePath("/dashboard");
   revalidatePath("/loads");
   return { success: true };
 }
 
+// Not cached: a single-record fetch used once to pre-fill an edit form,
+// visited once per edit rather than repeatedly — little to gain and one
+// less thing that could ever serve a stale record mid-edit.
 export async function getLoad(loadId: string): Promise<Load | null> {
   const supabase = await createClient();
   const { data, error } = await supabase.from("loads").select(LOAD_SELECT).eq("id", loadId).maybeSingle();
@@ -164,18 +181,34 @@ export async function getLoad(loadId: string): Promise<Load | null> {
 }
 
 export async function getLoadsForDate(date: string): Promise<Load[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("loads")
-    .select(LOAD_SELECT)
-    .eq("load_date", date)
-    .order("created_at", { ascending: false });
+  const user = await getAuthedUser();
+  if (!user) return [];
+  const token = await getAccessToken();
+  if (!token) return [];
 
-  if (error || !data) {
-    if (error) logServerError("getLoadsForDate", error);
-    return [];
-  }
-  return (data as unknown as LoadRow[]).map(mapLoadRow);
+  const cached = unstable_cache(
+    async (userId: string, accessToken: string, forDate: string) => {
+      const supabase = createTokenClient(accessToken);
+      const { data, error } = await supabase
+        .from("loads")
+        .select(LOAD_SELECT)
+        .eq("load_date", forDate)
+        .order("created_at", { ascending: false });
+
+      if (error || !data) {
+        if (error) logServerError("getLoadsForDate", error);
+        return [];
+      }
+      return (data as unknown as LoadRow[]).map(mapLoadRow);
+    },
+    ["getLoadsForDate"],
+    {
+      // Load rows embed company/party names via join.
+      tags: [cacheTags.loads(user.id), cacheTags.companies(user.id), cacheTags.parties(user.id)],
+      revalidate: CACHE_TTL_SECONDS,
+    },
+  );
+  return cached(user.id, token, date);
 }
 
 export interface SearchLoadsResult {
@@ -184,120 +217,156 @@ export interface SearchLoadsResult {
 }
 
 export async function searchLoads(filters: LoadFilters): Promise<SearchLoadsResult> {
-  const supabase = await createClient();
-  let query = supabase.from("loads").select(LOAD_SELECT);
+  const user = await getAuthedUser();
+  if (!user) return { loads: [], summary: summarize([]) };
+  const token = await getAccessToken();
+  if (!token) return { loads: [], summary: summarize([]) };
 
-  if (filters.dateFrom) query = query.gte("load_date", filters.dateFrom);
-  if (filters.dateTo) query = query.lte("load_date", filters.dateTo);
-  if (filters.vehicleNumber) {
-    query = query.ilike("vehicle_number_normalized", `%${normalizeVehicleNumber(filters.vehicleNumber)}%`);
-  }
-  if (filters.gst === "gst") query = query.eq("gst_enabled", true);
-  if (filters.gst === "no-gst") query = query.eq("gst_enabled", false);
+  const cached = unstable_cache(
+    async (userId: string, accessToken: string, f: LoadFilters) => {
+      const supabase = createTokenClient(accessToken);
+      let query = supabase.from("loads").select(LOAD_SELECT);
 
-  const NO_MATCH_ID = "00000000-0000-0000-0000-000000000000";
+      if (f.dateFrom) query = query.gte("load_date", f.dateFrom);
+      if (f.dateTo) query = query.lte("load_date", f.dateTo);
+      if (f.vehicleNumber) {
+        query = query.ilike("vehicle_number_normalized", `%${normalizeVehicleNumber(f.vehicleNumber)}%`);
+      }
+      if (f.gst === "gst") query = query.eq("gst_enabled", true);
+      if (f.gst === "no-gst") query = query.eq("gst_enabled", false);
 
-  const [companyMatches, partyMatches] = await Promise.all([
-    filters.companyName
-      ? supabase.from("companies").select("id").ilike("name_normalized", `%${filters.companyName.toLowerCase()}%`)
-      : null,
-    filters.partyName
-      ? supabase.from("parties").select("id").ilike("name_normalized", `%${filters.partyName.toLowerCase()}%`)
-      : null,
-  ]);
+      const NO_MATCH_ID = "00000000-0000-0000-0000-000000000000";
 
-  if (companyMatches) {
-    const ids = (companyMatches.data ?? []).map((c) => c.id);
-    query = query.in("company_id", ids.length ? ids : [NO_MATCH_ID]);
-  }
+      const [companyMatches, partyMatches] = await Promise.all([
+        f.companyName ? supabase.from("companies").select("id").ilike("name_normalized", `%${f.companyName.toLowerCase()}%`) : null,
+        f.partyName ? supabase.from("parties").select("id").ilike("name_normalized", `%${f.partyName.toLowerCase()}%`) : null,
+      ]);
 
-  if (partyMatches) {
-    const ids = (partyMatches.data ?? []).map((p) => p.id);
-    query = query.in("party_id", ids.length ? ids : [NO_MATCH_ID]);
-  }
+      if (companyMatches) {
+        const ids = (companyMatches.data ?? []).map((c) => c.id);
+        query = query.in("company_id", ids.length ? ids : [NO_MATCH_ID]);
+      }
 
-  if (filters.query) {
-    const q = filters.query.trim();
-    const normalizedVehicle = normalizeVehicleNumber(q);
-    const [matchingCompanyIds, matchingPartyIds] = await Promise.all([
-      supabase.from("companies").select("id").ilike("name_normalized", `%${q.toLowerCase()}%`),
-      supabase.from("parties").select("id").ilike("name_normalized", `%${q.toLowerCase()}%`),
-    ]);
+      if (partyMatches) {
+        const ids = (partyMatches.data ?? []).map((p) => p.id);
+        query = query.in("party_id", ids.length ? ids : [NO_MATCH_ID]);
+      }
 
-    const companyIds = (matchingCompanyIds.data ?? []).map((c) => c.id);
-    const partyIds = (matchingPartyIds.data ?? []).map((p) => p.id);
+      if (f.query) {
+        const q = f.query.trim();
+        const normalizedVehicle = normalizeVehicleNumber(q);
+        const [matchingCompanyIds, matchingPartyIds] = await Promise.all([
+          supabase.from("companies").select("id").ilike("name_normalized", `%${q.toLowerCase()}%`),
+          supabase.from("parties").select("id").ilike("name_normalized", `%${q.toLowerCase()}%`),
+        ]);
 
-    const orParts = [`vehicle_number_normalized.ilike.%${normalizedVehicle}%`];
-    if (companyIds.length) orParts.push(`company_id.in.(${companyIds.join(",")})`);
-    if (partyIds.length) orParts.push(`party_id.in.(${partyIds.join(",")})`);
+        const companyIds = (matchingCompanyIds.data ?? []).map((c) => c.id);
+        const partyIds = (matchingPartyIds.data ?? []).map((p) => p.id);
 
-    query = query.or(orParts.join(","));
-  }
+        const orParts = [`vehicle_number_normalized.ilike.%${normalizedVehicle}%`];
+        if (companyIds.length) orParts.push(`company_id.in.(${companyIds.join(",")})`);
+        if (partyIds.length) orParts.push(`party_id.in.(${partyIds.join(",")})`);
 
-  const { data, error } = await query.order("load_date", { ascending: false }).order("created_at", { ascending: false }).limit(200);
+        query = query.or(orParts.join(","));
+      }
 
-  if (error || !data) {
-    if (error) logServerError("searchLoads", error);
-    return { loads: [], summary: summarize([]) };
-  }
+      const { data, error } = await query.order("load_date", { ascending: false }).order("created_at", { ascending: false }).limit(200);
 
-  const loads = (data as unknown as LoadRow[]).map(mapLoadRow);
-  return { loads, summary: summarize(loads) };
+      if (error || !data) {
+        if (error) logServerError("searchLoads", error);
+        return { loads: [], summary: summarize([]) };
+      }
+
+      const loads = (data as unknown as LoadRow[]).map(mapLoadRow);
+      return { loads, summary: summarize(loads) };
+    },
+    ["searchLoads"],
+    {
+      // Depends on loads (rows + join), and on companies/parties both for
+      // the joined names and for resolving the name filters above.
+      tags: [cacheTags.loads(user.id), cacheTags.companies(user.id), cacheTags.parties(user.id)],
+      revalidate: CACHE_TTL_SECONDS,
+    },
+  );
+  return cached(user.id, token, filters);
 }
 
 export async function getVehicleSuggestions(query: string): Promise<string[]> {
-  const supabase = await createClient();
-  const normalized = escapeLikePattern(normalizeVehicleNumber(query));
-  const { data, error } = await supabase
-    .from("loads")
-    .select("vehicle_number, vehicle_number_normalized, created_at")
-    .ilike("vehicle_number_normalized", `${normalized}%`)
-    .order("created_at", { ascending: false })
-    .limit(50);
+  const user = await getAuthedUser();
+  if (!user) return [];
+  const token = await getAccessToken();
+  if (!token) return [];
 
-  if (error || !data) {
-    if (error) logServerError("getVehicleSuggestions", error);
-    return [];
-  }
+  const cached = unstable_cache(
+    async (userId: string, accessToken: string, q: string) => {
+      const supabase = createTokenClient(accessToken);
+      const normalized = escapeLikePattern(normalizeVehicleNumber(q));
+      const { data, error } = await supabase
+        .from("loads")
+        .select("vehicle_number, vehicle_number_normalized, created_at")
+        .ilike("vehicle_number_normalized", `${normalized}%`)
+        .order("created_at", { ascending: false })
+        .limit(50);
 
-  const seen = new Set<string>();
-  const suggestions: string[] = [];
-  for (const row of data) {
-    if (!seen.has(row.vehicle_number_normalized)) {
-      seen.add(row.vehicle_number_normalized);
-      suggestions.push(row.vehicle_number);
-    }
-    if (suggestions.length >= 8) break;
-  }
-  return suggestions;
+      if (error || !data) {
+        if (error) logServerError("getVehicleSuggestions", error);
+        return [];
+      }
+
+      const seen = new Set<string>();
+      const suggestions: string[] = [];
+      for (const row of data) {
+        if (!seen.has(row.vehicle_number_normalized)) {
+          seen.add(row.vehicle_number_normalized);
+          suggestions.push(row.vehicle_number);
+        }
+        if (suggestions.length >= 8) break;
+      }
+      return suggestions;
+    },
+    ["getVehicleSuggestions"],
+    // Vehicle number only — no company/party join in this query.
+    { tags: [cacheTags.loads(user.id)], revalidate: CACHE_TTL_SECONDS },
+  );
+  return cached(user.id, token, query);
 }
 
 /** Every distinct vehicle number the user has entered, for a browsable list (not a typeahead — no cap at 8). */
 export async function listVehicleNumbers(): Promise<string[]> {
   const user = await getAuthedUser();
   if (!user) return [];
+  const token = await getAccessToken();
+  if (!token) return [];
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("loads")
-    .select("vehicle_number, vehicle_number_normalized")
-    .order("vehicle_number")
-    .limit(2000);
+  const cached = unstable_cache(
+    async (userId: string, accessToken: string) => {
+      const supabase = createTokenClient(accessToken);
+      const { data, error } = await supabase
+        .from("loads")
+        .select("vehicle_number, vehicle_number_normalized")
+        .order("vehicle_number")
+        .limit(2000);
 
-  if (error || !data) {
-    if (error) logServerError("listVehicleNumbers", error);
-    return [];
-  }
+      if (error || !data) {
+        if (error) logServerError("listVehicleNumbers", error);
+        return [];
+      }
 
-  const seen = new Set<string>();
-  const numbers: string[] = [];
-  for (const row of data) {
-    if (!seen.has(row.vehicle_number_normalized)) {
-      seen.add(row.vehicle_number_normalized);
-      numbers.push(row.vehicle_number);
-    }
-  }
-  return numbers.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+      const seen = new Set<string>();
+      const numbers: string[] = [];
+      for (const row of data) {
+        if (!seen.has(row.vehicle_number_normalized)) {
+          seen.add(row.vehicle_number_normalized);
+          numbers.push(row.vehicle_number);
+        }
+      }
+      return numbers.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+    },
+    ["listVehicleNumbers"],
+    // Vehicle number only — no company/party join in this query.
+    { tags: [cacheTags.loads(user.id)], revalidate: CACHE_TTL_SECONDS },
+  );
+  return cached(user.id, token);
 }
 
 export interface VehicleHistory {
@@ -307,21 +376,37 @@ export interface VehicleHistory {
 }
 
 export async function getVehicleHistory(vehicleNumber: string, filters: HistoryFilters = {}): Promise<VehicleHistory> {
-  const supabase = await createClient();
-  const normalized = normalizeVehicleNumber(vehicleNumber);
-  let query = supabase.from("loads").select(LOAD_SELECT).eq("vehicle_number_normalized", normalized);
-  if (filters.dateFrom) query = query.gte("load_date", filters.dateFrom);
-  if (filters.dateTo) query = query.lte("load_date", filters.dateTo);
+  const user = await getAuthedUser();
+  if (!user) return { vehicleNumber, summary: summarize([]), loads: [] };
+  const token = await getAccessToken();
+  if (!token) return { vehicleNumber, summary: summarize([]), loads: [] };
 
-  const { data, error } = await query.order("load_date", { ascending: false }).order("created_at", { ascending: false });
+  const cached = unstable_cache(
+    async (userId: string, accessToken: string, number: string, dateFrom?: string, dateTo?: string) => {
+      const supabase = createTokenClient(accessToken);
+      const normalized = normalizeVehicleNumber(number);
+      let query = supabase.from("loads").select(LOAD_SELECT).eq("vehicle_number_normalized", normalized);
+      if (dateFrom) query = query.gte("load_date", dateFrom);
+      if (dateTo) query = query.lte("load_date", dateTo);
 
-  if (error || !data) {
-    if (error) logServerError("getVehicleHistory", error);
-    return { vehicleNumber, summary: summarize([]), loads: [] };
-  }
+      const { data, error } = await query.order("load_date", { ascending: false }).order("created_at", { ascending: false });
 
-  const loads = (data as unknown as LoadRow[]).map(mapLoadRow);
-  return { vehicleNumber: loads[0]?.vehicleNumber ?? vehicleNumber, summary: summarize(loads), loads };
+      if (error || !data) {
+        if (error) logServerError("getVehicleHistory", error);
+        return { vehicleNumber: number, summary: summarize([]), loads: [] };
+      }
+
+      const loads = (data as unknown as LoadRow[]).map(mapLoadRow);
+      return { vehicleNumber: loads[0]?.vehicleNumber ?? number, summary: summarize(loads), loads };
+    },
+    ["getVehicleHistory"],
+    {
+      // Load rows embed company/party names via join.
+      tags: [cacheTags.loads(user.id), cacheTags.companies(user.id), cacheTags.parties(user.id)],
+      revalidate: CACHE_TTL_SECONDS,
+    },
+  );
+  return cached(user.id, token, vehicleNumber, filters.dateFrom, filters.dateTo);
 }
 
 /**
@@ -352,6 +437,7 @@ export async function renameVehicleNumber(oldVehicleNumber: string, newVehicleNu
     return { success: false, error: friendlyErrorMessage(error, "Couldn't rename this vehicle. Please try again.") };
   }
 
+  revalidateTag(cacheTags.loads(user.id), { expire: 0 });
   revalidatePath("/", "layout");
   return { success: true, name: parsed.data };
 }

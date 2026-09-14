@@ -6,3 +6,4 @@
  */
 export const AUTH_USER_ID_HEADER = "x-authed-user-id";
 export const AUTH_USER_EMAIL_HEADER = "x-authed-user-email";
+export const AUTH_ACCESS_TOKEN_HEADER = "x-authed-access-token";

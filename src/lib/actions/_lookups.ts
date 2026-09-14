@@ -1,9 +1,11 @@
 import "server-only";
 
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient, getAuthedUser } from "@/lib/supabase/server";
 import { friendlyErrorMessage, logServerError } from "@/lib/errors";
 import { nameEntrySchema } from "@/lib/validation/schemas";
 import type { Company, Party } from "@/types/domain";
+import type { Database } from "@/types/database.types";
 
 type LookupTable = "companies" | "parties";
 
@@ -28,12 +30,18 @@ export function escapeLikePattern(value: string): string {
  * is how people actually recall these names. Only when nothing starts with
  * the query do we widen to a contains match, so a half-remembered name in
  * the middle ("traders") still finds something instead of a dead end.
+ *
+ * Takes an explicit client rather than building its own, so it can be
+ * called from inside a cached function (which isn't allowed to touch
+ * cookies() itself — see lib/supabase/server.ts:createTokenClient) as well
+ * as from an uncached one. RLS scopes every result to the caller, so no
+ * separate user_id filter is needed here regardless of which client it is.
  */
-export async function searchLookup(table: LookupTable, query: string): Promise<Company[] | Party[]> {
-  const user = await getAuthedUser();
-  if (!user) return [];
-
-  const supabase = await createClient();
+export async function searchLookup(
+  supabase: SupabaseClient<Database>,
+  table: LookupTable,
+  query: string,
+): Promise<Company[] | Party[]> {
   const trimmed = query.trim();
   const select = () => supabase.from(table).select("id, name").order("name").limit(20);
 

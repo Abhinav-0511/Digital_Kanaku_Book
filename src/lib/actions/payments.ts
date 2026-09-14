@@ -1,10 +1,11 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
-import { createClient, getAuthedUser } from "@/lib/supabase/server";
+import { unstable_cache, revalidatePath, revalidateTag } from "next/cache";
+import { createClient, createTokenClient, getAccessToken, getAuthedUser } from "@/lib/supabase/server";
 import { friendlyErrorMessage, logServerError } from "@/lib/errors";
 import { paymentInputSchema } from "@/lib/validation/schemas";
 import { findOrCreateLookup } from "./_lookups";
+import { cacheTags, CACHE_TTL_SECONDS } from "@/lib/cache/tags";
 import { PAYMENT_SELECT, mapPaymentRow, summarizePayments, type PaymentRow, type PaymentSummary } from "@/lib/paymentMapper";
 import type { Payment, PaymentFilters } from "@/types/domain";
 
@@ -45,6 +46,16 @@ async function resolveAndValidate(input: PaymentFormInput) {
   };
 }
 
+/** Every save invalidates companies/parties too, not just payments — saving
+ * can silently create a brand-new company/party (find-or-create), and this
+ * runs regardless of whether that actually happened this time; a spurious
+ * cache miss is cheap, a missed invalidation is a wrong number on screen. */
+function invalidatePaymentCaches(userId: string) {
+  revalidateTag(cacheTags.payments(userId), { expire: 0 });
+  revalidateTag(cacheTags.companies(userId), { expire: 0 });
+  revalidateTag(cacheTags.parties(userId), { expire: 0 });
+}
+
 export async function createPayment(input: PaymentFormInput): Promise<PaymentActionResult> {
   const [resolved, user] = await Promise.all([resolveAndValidate(input), getAuthedUser()]);
   if (!resolved.success) return { success: false, error: resolved.error };
@@ -69,6 +80,7 @@ export async function createPayment(input: PaymentFormInput): Promise<PaymentAct
     return { success: false, error: friendlyErrorMessage(error, "Couldn't save this payment. Please check your details and try again.") };
   }
 
+  invalidatePaymentCaches(user.id);
   revalidatePath("/dashboard");
   revalidatePath("/payments");
   return { success: true, paymentId: data.id };
@@ -97,6 +109,7 @@ export async function updatePayment(paymentId: string, input: PaymentFormInput):
     return { success: false, error: friendlyErrorMessage(error, "Couldn't update this payment. Please check your details and try again.") };
   }
 
+  invalidatePaymentCaches(user.id);
   revalidatePath("/dashboard");
   revalidatePath("/payments");
   return { success: true, paymentId };
@@ -114,11 +127,15 @@ export async function deletePayment(paymentId: string): Promise<PaymentActionRes
     return { success: false, error: friendlyErrorMessage(error, "Couldn't delete this payment. Please try again.") };
   }
 
+  revalidateTag(cacheTags.payments(user.id), { expire: 0 });
   revalidatePath("/dashboard");
   revalidatePath("/payments");
   return { success: true };
 }
 
+// Not cached: a single-record fetch used once to pre-fill an edit form,
+// visited once per edit rather than repeatedly — little to gain and one
+// less thing that could ever serve a stale record mid-edit.
 export async function getPayment(paymentId: string): Promise<Payment | null> {
   const supabase = await createClient();
   const { data, error } = await supabase.from("payments").select(PAYMENT_SELECT).eq("id", paymentId).maybeSingle();
@@ -130,18 +147,34 @@ export async function getPayment(paymentId: string): Promise<Payment | null> {
 }
 
 export async function getPaymentsForDate(date: string): Promise<Payment[]> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("payments")
-    .select(PAYMENT_SELECT)
-    .eq("payment_date", date)
-    .order("created_at", { ascending: false });
+  const user = await getAuthedUser();
+  if (!user) return [];
+  const token = await getAccessToken();
+  if (!token) return [];
 
-  if (error || !data) {
-    if (error) logServerError("getPaymentsForDate", error);
-    return [];
-  }
-  return (data as unknown as PaymentRow[]).map(mapPaymentRow);
+  const cached = unstable_cache(
+    async (userId: string, accessToken: string, forDate: string) => {
+      const supabase = createTokenClient(accessToken);
+      const { data, error } = await supabase
+        .from("payments")
+        .select(PAYMENT_SELECT)
+        .eq("payment_date", forDate)
+        .order("created_at", { ascending: false });
+
+      if (error || !data) {
+        if (error) logServerError("getPaymentsForDate", error);
+        return [];
+      }
+      return (data as unknown as PaymentRow[]).map(mapPaymentRow);
+    },
+    ["getPaymentsForDate"],
+    {
+      // Payment rows embed company/party names via join.
+      tags: [cacheTags.payments(user.id), cacheTags.companies(user.id), cacheTags.parties(user.id)],
+      revalidate: CACHE_TTL_SECONDS,
+    },
+  );
+  return cached(user.id, token, date);
 }
 
 export interface SearchPaymentsResult {
@@ -150,39 +183,57 @@ export interface SearchPaymentsResult {
 }
 
 export async function searchPayments(filters: PaymentFilters): Promise<SearchPaymentsResult> {
-  const supabase = await createClient();
-  let query = supabase.from("payments").select(PAYMENT_SELECT);
+  const user = await getAuthedUser();
+  if (!user) return { payments: [], summary: summarizePayments([]) };
+  const token = await getAccessToken();
+  if (!token) return { payments: [], summary: summarizePayments([]) };
 
-  if (filters.dateFrom) query = query.gte("payment_date", filters.dateFrom);
-  if (filters.dateTo) query = query.lte("payment_date", filters.dateTo);
+  const cached = unstable_cache(
+    async (
+      userId: string,
+      accessToken: string,
+      dateFrom?: string,
+      dateTo?: string,
+      partyName?: string,
+      companyName?: string,
+    ) => {
+      const supabase = createTokenClient(accessToken);
+      let query = supabase.from("payments").select(PAYMENT_SELECT);
 
-  const NO_MATCH_ID = "00000000-0000-0000-0000-000000000000";
+      if (dateFrom) query = query.gte("payment_date", dateFrom);
+      if (dateTo) query = query.lte("payment_date", dateTo);
 
-  if (filters.partyName) {
-    const matches = await supabase
-      .from("parties")
-      .select("id")
-      .ilike("name_normalized", `%${filters.partyName.toLowerCase()}%`);
-    const ids = (matches.data ?? []).map((p) => p.id);
-    query = query.in("party_id", ids.length ? ids : [NO_MATCH_ID]);
-  }
+      const NO_MATCH_ID = "00000000-0000-0000-0000-000000000000";
 
-  if (filters.companyName) {
-    const matches = await supabase
-      .from("companies")
-      .select("id")
-      .ilike("name_normalized", `%${filters.companyName.toLowerCase()}%`);
-    const ids = (matches.data ?? []).map((c) => c.id);
-    query = query.in("company_id", ids.length ? ids : [NO_MATCH_ID]);
-  }
+      if (partyName) {
+        const matches = await supabase.from("parties").select("id").ilike("name_normalized", `%${partyName.toLowerCase()}%`);
+        const ids = (matches.data ?? []).map((p) => p.id);
+        query = query.in("party_id", ids.length ? ids : [NO_MATCH_ID]);
+      }
 
-  const { data, error } = await query.order("payment_date", { ascending: false }).order("created_at", { ascending: false }).limit(200);
+      if (companyName) {
+        const matches = await supabase.from("companies").select("id").ilike("name_normalized", `%${companyName.toLowerCase()}%`);
+        const ids = (matches.data ?? []).map((c) => c.id);
+        query = query.in("company_id", ids.length ? ids : [NO_MATCH_ID]);
+      }
 
-  if (error || !data) {
-    if (error) logServerError("searchPayments", error);
-    return { payments: [], summary: summarizePayments([]) };
-  }
+      const { data, error } = await query.order("payment_date", { ascending: false }).order("created_at", { ascending: false }).limit(200);
 
-  const payments = (data as unknown as PaymentRow[]).map(mapPaymentRow);
-  return { payments, summary: summarizePayments(payments) };
+      if (error || !data) {
+        if (error) logServerError("searchPayments", error);
+        return { payments: [], summary: summarizePayments([]) };
+      }
+
+      const payments = (data as unknown as PaymentRow[]).map(mapPaymentRow);
+      return { payments, summary: summarizePayments(payments) };
+    },
+    ["searchPayments"],
+    {
+      // Depends on payments (rows + join), and on companies/parties both
+      // for the joined names and for resolving the name filters above.
+      tags: [cacheTags.payments(user.id), cacheTags.companies(user.id), cacheTags.parties(user.id)],
+      revalidate: CACHE_TTL_SECONDS,
+    },
+  );
+  return cached(user.id, token, filters.dateFrom, filters.dateTo, filters.partyName, filters.companyName);
 }

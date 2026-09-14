@@ -1,7 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database.types";
-import { AUTH_USER_ID_HEADER, AUTH_USER_EMAIL_HEADER } from "./authHeaders";
+import { AUTH_USER_ID_HEADER, AUTH_USER_EMAIL_HEADER, AUTH_ACCESS_TOKEN_HEADER } from "./authHeaders";
 
 const PUBLIC_PATHS = ["/login", "/register", "/forgot-password", "/reset-password"];
 
@@ -21,6 +21,7 @@ export async function updateSession(request: NextRequest) {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.delete(AUTH_USER_ID_HEADER);
   requestHeaders.delete(AUTH_USER_EMAIL_HEADER);
+  requestHeaders.delete(AUTH_ACCESS_TOKEN_HEADER);
 
   let supabaseResponse = NextResponse.next({ request: { headers: requestHeaders } });
 
@@ -68,6 +69,16 @@ export async function updateSession(request: NextRequest) {
   if (user) {
     requestHeaders.set(AUTH_USER_ID_HEADER, user.id);
     if (user.email) requestHeaders.set(AUTH_USER_EMAIL_HEADER, user.email);
+
+    // getUser() just validated (and, if needed, refreshed) this session, so
+    // getSession() here reads that already-current state rather than
+    // independently re-parsing cookies later — see getAccessToken() in
+    // lib/supabase/server.ts for why a fresh token matters for that path.
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+    if (session?.access_token) requestHeaders.set(AUTH_ACCESS_TOKEN_HEADER, session.access_token);
+
     const responseWithUser = NextResponse.next({ request: { headers: requestHeaders } });
     supabaseResponse.cookies.getAll().forEach((cookie) => responseWithUser.cookies.set(cookie));
     supabaseResponse = responseWithUser;
