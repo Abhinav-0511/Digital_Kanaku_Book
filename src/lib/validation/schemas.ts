@@ -42,10 +42,12 @@ export const resetPasswordSchema = z
 
 export const gstModeSchema = z.enum(["standard", "custom", "none"]);
 
+export const vehicleNumberSchema = z.string().trim().min(1, "Vehicle number is required").max(20, "Vehicle number is too long");
+
 export const loadInputSchema = z
   .object({
     weight: z.coerce.number({ message: "Enter a valid weight" }).positive("Enter a valid weight greater than 0"),
-    vehicleNumber: z.string().trim().min(1, "Vehicle number is required").max(20, "Vehicle number is too long"),
+    vehicleNumber: vehicleNumberSchema,
     companyName: z.string().trim().max(100, "Company name is too long").optional().default(""),
     partyName: z.string().trim().max(100, "Party name is too long").optional().default(""),
     rate: z.coerce.number().min(0, "Party rate cannot be negative").default(0),

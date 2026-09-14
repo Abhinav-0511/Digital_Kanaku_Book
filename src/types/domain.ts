@@ -68,13 +68,17 @@ export interface DailySummary {
   totalBaseAmount: number;
   /** Sum of per-load party amounts (paid), GST-inclusive, 0 where party is blank/"Myself". */
   totalPartyAmount: number;
-  /** Sum of per-load company amounts (received), GST-inclusive, 0 where company is blank/"Godown". */
+  /** Sum of per-load company amounts (received), GST-inclusive (company GST is always applied), 0 where company is blank/"Godown". */
   totalCompanyAmount: number;
   totalGstAmount: number;
   totalDriverAdvance: number;
   totalVehicleRent: number;
   totalDieselCost: number;
   totalAmount: number;
+  /** totalCompanyAmount − totalPartyAmount. */
+  totalDifference: number;
+  /** totalDifference minus driver advance, vehicle rent and diesel. */
+  totalProfit: number;
 }
 
 export type PaymentType = "paid" | "received";
@@ -107,4 +111,10 @@ export interface LoadFilters {
   partyName?: string;
   gst?: "all" | "gst" | "no-gst";
   query?: string;
+}
+
+/** Optional date bounds for a single entity's history (vehicle/company/party). */
+export interface HistoryFilters {
+  dateFrom?: string;
+  dateTo?: string;
 }

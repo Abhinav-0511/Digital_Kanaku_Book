@@ -1,4 +1,4 @@
-import { calculateLoadAmountBreakdown } from "@/lib/calculations/loadCalculations";
+import { calculateLoadAmountBreakdown, calculateProfit, round2 } from "@/lib/calculations/loadCalculations";
 import type { DailySummary, Load } from "@/types/domain";
 
 export const LOAD_SELECT =
@@ -58,7 +58,7 @@ export function mapLoadRow(row: LoadRow): Load {
 }
 
 export function summarize(loads: Load[]): DailySummary {
-  return loads.reduce<DailySummary>(
+  const totals = loads.reduce<Omit<DailySummary, "totalDifference" | "totalProfit">>(
     (acc, l) => {
       const { partyAmount, companyAmount } = calculateLoadAmountBreakdown({
         weight: l.weight,
@@ -95,4 +95,9 @@ export function summarize(loads: Load[]): DailySummary {
       totalAmount: 0,
     },
   );
+
+  const totalDifference = round2(totals.totalCompanyAmount - totals.totalPartyAmount);
+  const totalProfit = calculateProfit(totalDifference, totals.totalDriverAdvance, totals.totalVehicleRent, totals.totalDieselCost);
+
+  return { ...totals, totalDifference, totalProfit };
 }

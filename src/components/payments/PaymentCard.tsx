@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/formatting/currency";
 import { formatTime } from "@/lib/formatting/date";
@@ -6,7 +7,10 @@ import type { Payment } from "@/types/domain";
 
 export function PaymentCard({ payment }: { payment: Payment }) {
   return (
-    <div className="rounded-xl border border-border bg-card p-4 shadow-sm">
+    <Link
+      href={`/payments/${payment.id}/edit`}
+      className="block rounded-xl border border-border bg-card p-4 shadow-sm transition-colors active:bg-muted/60"
+    >
       <div className="flex items-start justify-between gap-3">
         <p className="truncate text-base font-semibold">{paymentDisplayName(payment)}</p>
         <span className="shrink-0 text-xs text-muted-foreground">{formatTime(payment.createdAt)}</span>
@@ -17,6 +21,6 @@ export function PaymentCard({ payment }: { payment: Payment }) {
           {payment.paymentType === "received" ? "Received" : "Paid"}
         </Badge>
       </div>
-    </div>
+    </Link>
   );
 }

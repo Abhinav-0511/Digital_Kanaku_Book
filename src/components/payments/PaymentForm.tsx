@@ -10,9 +10,9 @@ import { LoadingButton } from "@/components/common/LoadingButton";
 import { NameCombobox } from "@/components/loads/NameCombobox";
 import { searchCompanies } from "@/lib/actions/companies";
 import { searchParties } from "@/lib/actions/parties";
-import { createPayment } from "@/lib/actions/payments";
+import { createPayment, updatePayment } from "@/lib/actions/payments";
 import { todayIso } from "@/lib/formatting/date";
-import type { PaymentType } from "@/types/domain";
+import type { Payment, PaymentType } from "@/types/domain";
 
 interface FormState {
   paymentType: PaymentType;
@@ -22,8 +22,17 @@ interface FormState {
   paymentDate: string;
 }
 
-function initialState(): FormState {
-  return { paymentType: "paid", companyName: "", partyName: "", amount: "", paymentDate: todayIso() };
+function initialState(payment?: Payment): FormState {
+  if (!payment) {
+    return { paymentType: "paid", companyName: "", partyName: "", amount: "", paymentDate: todayIso() };
+  }
+  return {
+    paymentType: payment.paymentType,
+    companyName: payment.companyName,
+    partyName: payment.partyName,
+    amount: String(payment.amount),
+    paymentDate: payment.paymentDate,
+  };
 }
 
 const PAYMENT_TYPE_OPTIONS: { value: PaymentType; label: string }[] = [
@@ -31,9 +40,15 @@ const PAYMENT_TYPE_OPTIONS: { value: PaymentType; label: string }[] = [
   { value: "received", label: "Received" },
 ];
 
-export function PaymentForm() {
+interface PaymentFormProps {
+  mode?: "create" | "edit";
+  paymentId?: string;
+  initialPayment?: Payment;
+}
+
+export function PaymentForm({ mode = "create", paymentId, initialPayment }: PaymentFormProps) {
   const router = useRouter();
-  const [values, setValues] = useState<FormState>(initialState);
+  const [values, setValues] = useState<FormState>(() => initialState(initialPayment));
   const [errors, setErrors] = useState<Partial<Record<keyof FormState, string>>>({});
   const [submitting, setSubmitting] = useState(false);
   const [savedState, setSavedState] = useState<"idle" | "saved">("idle");
@@ -43,11 +58,26 @@ export function PaymentForm() {
     setErrors((prev) => ({ ...prev, [key]: undefined }));
   }
 
+  /** Paid money goes out to a party; received money comes in from a company —
+   * only one is ever relevant, so switching the type clears the other. */
+  function setPaymentType(paymentType: PaymentType) {
+    setValues((prev) => ({
+      ...prev,
+      paymentType,
+      companyName: paymentType === "received" ? prev.companyName : "",
+      partyName: paymentType === "paid" ? prev.partyName : "",
+    }));
+    setErrors((prev) => ({ ...prev, companyName: undefined, partyName: undefined }));
+  }
+
   function validate(): boolean {
     const nextErrors: Partial<Record<keyof FormState, string>> = {};
 
-    if (!values.companyName.trim() && !values.partyName.trim()) {
-      nextErrors.partyName = "Enter a company or a party.";
+    if (values.paymentType === "paid" && !values.partyName.trim()) {
+      nextErrors.partyName = "Enter a party.";
+    }
+    if (values.paymentType === "received" && !values.companyName.trim()) {
+      nextErrors.companyName = "Enter a company.";
     }
     const amount = Number(values.amount);
     if (!values.amount || !Number.isFinite(amount) || amount <= 0) {
@@ -67,11 +97,18 @@ export function PaymentForm() {
     if (!validate()) return;
 
     setSubmitting(true);
-    const result = await createPayment(values);
+    const result = mode === "create" ? await createPayment(values) : await updatePayment(paymentId!, values);
     setSubmitting(false);
 
     if (!result.success) {
       toast.error(result.error ?? "Couldn't save this payment. Please check your details and try again.");
+      return;
+    }
+
+    if (mode === "edit") {
+      toast.success("Payment updated");
+      router.push(`/payments?date=${values.paymentDate}`);
+      router.refresh();
       return;
     }
 
@@ -115,7 +152,7 @@ export function PaymentForm() {
             <button
               key={option.value}
               type="button"
-              onClick={() => setField("paymentType", option.value)}
+              onClick={() => setPaymentType(option.value)}
               className={cn(
                 "h-11 rounded-lg border text-sm font-medium transition-colors",
                 values.paymentType === option.value
@@ -129,28 +166,31 @@ export function PaymentForm() {
         </div>
       </div>
 
-      <Field label="Company (optional)" htmlFor="companyName">
-        <NameCombobox
-          id="companyName"
-          label="Company"
-          placeholder="Type or select a company"
-          value={values.companyName}
-          onChange={(v) => setField("companyName", v)}
-          search={searchCompanies}
-        />
-      </Field>
-
-      <Field label="Party (optional)" htmlFor="partyName" error={errors.partyName}>
-        <NameCombobox
-          id="partyName"
-          label="Party"
-          placeholder="Type or select a party"
-          value={values.partyName}
-          onChange={(v) => setField("partyName", v)}
-          search={searchParties}
-          error={Boolean(errors.partyName)}
-        />
-      </Field>
+      {values.paymentType === "received" ? (
+        <Field label="Company" htmlFor="companyName" error={errors.companyName}>
+          <NameCombobox
+            id="companyName"
+            label="Company"
+            placeholder="Type or select a company"
+            value={values.companyName}
+            onChange={(v) => setField("companyName", v)}
+            search={searchCompanies}
+            error={Boolean(errors.companyName)}
+          />
+        </Field>
+      ) : (
+        <Field label="Party" htmlFor="partyName" error={errors.partyName}>
+          <NameCombobox
+            id="partyName"
+            label="Party"
+            placeholder="Type or select a party"
+            value={values.partyName}
+            onChange={(v) => setField("partyName", v)}
+            search={searchParties}
+            error={Boolean(errors.partyName)}
+          />
+        </Field>
+      )}
 
       <Field label="Amount" htmlFor="amount" error={errors.amount}>
         <div className="relative">
@@ -183,7 +223,7 @@ export function PaymentForm() {
 
       <div className="sticky bottom-16 z-10 -mx-4 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">
         <LoadingButton type="submit" className="h-12 w-full text-base" loading={submitting} loadingText="Saving...">
-          Save Payment
+          {mode === "edit" ? "Update Payment" : "Save Payment"}
         </LoadingButton>
       </div>
     </form>

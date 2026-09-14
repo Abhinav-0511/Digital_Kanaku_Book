@@ -10,7 +10,7 @@ import { NameCombobox } from "./NameCombobox";
 import { VehicleInput } from "./VehicleInput";
 import { GstSelector } from "./GstSelector";
 import { LoadSummaryPreview } from "./LoadSummaryPreview";
-import { calculateLoadAmounts, calculateLoadAmountBreakdown } from "@/lib/calculations/loadCalculations";
+import { calculateLoadAmounts, calculateLoadAmountBreakdown, calculateProfit } from "@/lib/calculations/loadCalculations";
 import { searchCompanies } from "@/lib/actions/companies";
 import { searchParties } from "@/lib/actions/parties";
 import { createLoad, updateLoad } from "@/lib/actions/loads";
@@ -100,22 +100,29 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
     const vehicleRent = Number(values.vehicleRent || 0);
     const dieselCost = Number(values.dieselCost || 0);
     const { baseAmount, gstAmount, totalAmount } = calculateLoadAmounts({ weight, rate, gstEnabled, gstPercentage });
-    const { partyAmount, companyAmount, difference } = calculateLoadAmountBreakdown({
-      weight,
-      rate,
-      companyRate,
-      gstEnabled,
-      gstPercentage,
-      partyName: values.partyName,
-      companyName: values.companyName,
-    });
+    const { partyAmount, companyBaseAmount, companyGstPercentage, companyGstAmount, companyTotal, companyAmount, difference } =
+      calculateLoadAmountBreakdown({
+        weight,
+        rate,
+        companyRate,
+        gstEnabled,
+        gstPercentage,
+        partyName: values.partyName,
+        companyName: values.companyName,
+      });
+    const profit = calculateProfit(difference, driverAdvance, vehicleRent, dieselCost);
     return {
       weight,
       rate,
       companyRate,
       partyAmount,
+      companyBaseAmount,
+      companyGstPercentage,
+      companyGstAmount,
+      companyTotal,
       companyAmount,
       difference,
+      profit,
       gstEnabled,
       gstPercentage,
       driverAdvance,
@@ -372,9 +379,14 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
         gstPercentage={preview.gstPercentage}
         gstAmount={preview.gstAmount}
         companyRate={preview.companyRate}
+        companyBaseAmount={preview.companyBaseAmount}
+        companyGstPercentage={preview.companyGstPercentage}
+        companyGstAmount={preview.companyGstAmount}
+        companyTotal={preview.companyTotal}
         partyAmount={preview.partyAmount}
         companyAmount={preview.companyAmount}
         difference={preview.difference}
+        profit={preview.profit}
         driverAdvance={preview.driverAdvance}
         vehicleRent={preview.vehicleRent}
         dieselCost={preview.dieselCost}

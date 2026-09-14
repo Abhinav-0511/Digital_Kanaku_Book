@@ -17,7 +17,10 @@ export default async function EditLoadPage({ params }: { params: Promise<{ id: s
         <h1 className="text-xl font-semibold">Edit Load</h1>
         <p className="text-sm text-muted-foreground">{load.vehicleNumber}</p>
       </div>
-      <LoadForm mode="edit" loadId={load.id} initialLoad={load} weightUnit={profile?.weightUnit ?? "kg"} />
+      {/* key forces a fresh mount per load, so useState's initializer
+          re-seeds the form instead of carrying over another load's state
+          when navigating directly between two edit pages. */}
+      <LoadForm key={load.id} mode="edit" loadId={load.id} initialLoad={load} weightUnit={profile?.weightUnit ?? "kg"} />
     </div>
   );
 }

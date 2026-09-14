@@ -1,3 +1,4 @@
+import { round2 } from "@/lib/calculations/loadCalculations";
 import { formatCurrency, formatNumber } from "@/lib/formatting/currency";
 
 interface LoadSummaryPreviewProps {
@@ -9,9 +10,14 @@ interface LoadSummaryPreviewProps {
   gstPercentage: number;
   gstAmount: number;
   companyRate: number;
+  companyBaseAmount: number;
+  companyGstPercentage: number;
+  companyGstAmount: number;
+  companyTotal: number;
   partyAmount: number;
   companyAmount: number;
   difference: number;
+  profit: number;
   driverAdvance: number;
   vehicleRent: number;
   dieselCost: number;
@@ -27,15 +33,21 @@ export function LoadSummaryPreview({
   gstPercentage,
   gstAmount,
   companyRate,
+  companyBaseAmount,
+  companyGstPercentage,
+  companyGstAmount,
+  companyTotal,
   partyAmount,
   companyAmount,
   difference,
+  profit,
   driverAdvance,
   vehicleRent,
   dieselCost,
   totalAmount,
 }: LoadSummaryPreviewProps) {
   const hasOtherCosts = companyRate > 0 || driverAdvance > 0 || vehicleRent > 0 || dieselCost > 0;
+  const otherAmount = round2(driverAdvance + vehicleRent + dieselCost);
 
   return (
     <div className="space-y-2.5 rounded-xl border border-border bg-muted/40 p-4">
@@ -57,25 +69,45 @@ export function LoadSummaryPreview({
                 label="Weight × Company Rate"
                 value={`${formatNumber(weight)} ${weightUnit} × ${formatCurrency(companyRate)}`}
               />
-              <Row label="Party Amount" value={formatCurrency(partyAmount)} />
-              <Row label="Company Amount" value={formatCurrency(companyAmount)} />
-              <Row label="Difference" value={formatCurrency(difference)} />
+              <Row label="Company Base Amount" value={formatCurrency(companyBaseAmount)} />
+              <Row label={`GST (${formatNumber(companyGstPercentage)}%)`} value={formatCurrency(companyGstAmount)} />
+              <div className="flex items-center justify-between border-t border-border pt-2.5">
+                <span className="text-sm font-semibold text-foreground">Company Total</span>
+                <span className="text-xl font-bold text-primary">{formatCurrency(companyTotal)}</span>
+              </div>
+
+              <div className="space-y-2.5 border-t border-dashed border-border pt-2.5">
+                <Row label="Party Amount" value={formatCurrency(partyAmount)} />
+                <Row label="Company Amount" value={formatCurrency(companyAmount)} />
+                <Row label="Difference" value={formatCurrency(difference)} bold />
+              </div>
             </>
           ) : null}
           {driverAdvance > 0 ? <Row label="Driver Advance" value={formatCurrency(driverAdvance)} /> : null}
           {vehicleRent > 0 ? <Row label="Vehicle Rent" value={formatCurrency(vehicleRent)} /> : null}
           {dieselCost > 0 ? <Row label="Diesel" value={formatCurrency(dieselCost)} /> : null}
+
+          {companyRate > 0 ? (
+            <>
+              <Row label="Other Amount" value={formatCurrency(otherAmount)} bold />
+              <Row label="Difference − Other Amount" value={`${formatCurrency(difference)} − ${formatCurrency(otherAmount)}`} />
+              <div className="flex items-center justify-between rounded-lg border border-primary/30 bg-primary/10 px-3 py-2.5">
+                <span className="text-sm font-semibold text-foreground">PROFIT</span>
+                <span className="text-xl font-bold text-primary">{formatCurrency(profit)}</span>
+              </div>
+            </>
+          ) : null}
         </div>
       ) : null}
     </div>
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
     <div className="flex items-center justify-between text-sm">
-      <span className="text-muted-foreground">{label}</span>
-      <span className="font-medium text-foreground">{value}</span>
+      <span className={bold ? "font-semibold text-foreground" : "text-muted-foreground"}>{label}</span>
+      <span className={bold ? "font-bold text-foreground" : "font-medium text-foreground"}>{value}</span>
     </div>
   );
 }

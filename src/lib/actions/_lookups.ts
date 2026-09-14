@@ -7,27 +7,60 @@ import type { Company, Party } from "@/types/domain";
 
 type LookupTable = "companies" | "parties";
 
+export interface RenameResult {
+  success: boolean;
+  error?: string;
+  name?: string;
+}
+
 export function normalizeName(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }
 
+/** Escapes LIKE wildcards so a typed % or _ matches literally. */
+export function escapeLikePattern(value: string): string {
+  return value.replace(/[\\%_]/g, (match) => `\\${match}`);
+}
+
+/**
+ * Suggestions for the company/party fields. Matches are anchored to the
+ * start of the name — typing "su" offers Suresh Traders, not Basudev — which
+ * is how people actually recall these names. Only when nothing starts with
+ * the query do we widen to a contains match, so a half-remembered name in
+ * the middle ("traders") still finds something instead of a dead end.
+ */
 export async function searchLookup(table: LookupTable, query: string): Promise<Company[] | Party[]> {
   const user = await getAuthedUser();
   if (!user) return [];
 
   const supabase = await createClient();
   const trimmed = query.trim();
-  let request = supabase.from(table).select("id, name").order("name").limit(20);
-  if (trimmed) {
-    request = request.ilike("name_normalized", `%${normalizeName(trimmed)}%`);
+  const select = () => supabase.from(table).select("id, name").order("name").limit(20);
+
+  if (!trimmed) {
+    const { data, error } = await select();
+    if (error) {
+      logServerError(`searchLookup:${table}`, error);
+      return [];
+    }
+    return data ?? [];
   }
 
-  const { data, error } = await request;
-  if (error) {
-    logServerError(`searchLookup:${table}`, error);
+  const pattern = escapeLikePattern(normalizeName(trimmed));
+
+  const prefix = await select().ilike("name_normalized", `${pattern}%`);
+  if (prefix.error) {
+    logServerError(`searchLookup:${table}`, prefix.error);
     return [];
   }
-  return data ?? [];
+  if (prefix.data && prefix.data.length > 0) return prefix.data;
+
+  const contains = await select().ilike("name_normalized", `%${pattern}%`);
+  if (contains.error) {
+    logServerError(`searchLookup:${table}`, contains.error);
+    return [];
+  }
+  return contains.data ?? [];
 }
 
 /**

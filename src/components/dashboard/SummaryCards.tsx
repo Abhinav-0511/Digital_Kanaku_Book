@@ -17,12 +17,8 @@ export function SummaryCards({
     ? [
         { label: "Party Amount", value: formatCurrencyWhole(summary.totalPartyAmount), suffix: "", emphasize: true },
         { label: "Company Amount", value: formatCurrencyWhole(summary.totalCompanyAmount), suffix: "", emphasize: true },
-        {
-          label: "Difference",
-          value: formatCurrencyWhole(summary.totalCompanyAmount - summary.totalPartyAmount),
-          suffix: "",
-          emphasize: true,
-        },
+        { label: "Difference", value: formatCurrencyWhole(summary.totalDifference), suffix: "", emphasize: true },
+        { label: "Profit", value: formatCurrencyWhole(summary.totalProfit), suffix: "", emphasize: true },
       ]
     : [{ label: "Total Amount", value: formatCurrencyWhole(summary.totalAmount), suffix: "", emphasize: true }];
 

@@ -3,11 +3,11 @@
 import { revalidatePath } from "next/cache";
 import { createClient, getAuthedUser } from "@/lib/supabase/server";
 import { friendlyErrorMessage, logServerError } from "@/lib/errors";
-import { loadInputSchema } from "@/lib/validation/schemas";
+import { loadInputSchema, vehicleNumberSchema } from "@/lib/validation/schemas";
 import { normalizeVehicleNumber } from "@/lib/formatting/vehicle";
-import { findOrCreateLookup } from "./_lookups";
+import { escapeLikePattern, findOrCreateLookup, type RenameResult } from "./_lookups";
 import { LOAD_SELECT, mapLoadRow, summarize, type LoadRow } from "@/lib/loadMapper";
-import type { DailySummary, Load, LoadFilters } from "@/types/domain";
+import type { DailySummary, HistoryFilters, Load, LoadFilters } from "@/types/domain";
 
 export type { LoadRow };
 
@@ -247,7 +247,7 @@ export async function searchLoads(filters: LoadFilters): Promise<SearchLoadsResu
 
 export async function getVehicleSuggestions(query: string): Promise<string[]> {
   const supabase = await createClient();
-  const normalized = normalizeVehicleNumber(query);
+  const normalized = escapeLikePattern(normalizeVehicleNumber(query));
   const { data, error } = await supabase
     .from("loads")
     .select("vehicle_number, vehicle_number_normalized, created_at")
@@ -272,21 +272,48 @@ export async function getVehicleSuggestions(query: string): Promise<string[]> {
   return suggestions;
 }
 
+/** Every distinct vehicle number the user has entered, for a browsable list (not a typeahead — no cap at 8). */
+export async function listVehicleNumbers(): Promise<string[]> {
+  const user = await getAuthedUser();
+  if (!user) return [];
+
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("loads")
+    .select("vehicle_number, vehicle_number_normalized")
+    .order("vehicle_number")
+    .limit(2000);
+
+  if (error || !data) {
+    if (error) logServerError("listVehicleNumbers", error);
+    return [];
+  }
+
+  const seen = new Set<string>();
+  const numbers: string[] = [];
+  for (const row of data) {
+    if (!seen.has(row.vehicle_number_normalized)) {
+      seen.add(row.vehicle_number_normalized);
+      numbers.push(row.vehicle_number);
+    }
+  }
+  return numbers.sort((a, b) => a.localeCompare(b, undefined, { sensitivity: "base" }));
+}
+
 export interface VehicleHistory {
   vehicleNumber: string;
   summary: DailySummary;
   loads: Load[];
 }
 
-export async function getVehicleHistory(vehicleNumber: string): Promise<VehicleHistory> {
+export async function getVehicleHistory(vehicleNumber: string, filters: HistoryFilters = {}): Promise<VehicleHistory> {
   const supabase = await createClient();
   const normalized = normalizeVehicleNumber(vehicleNumber);
-  const { data, error } = await supabase
-    .from("loads")
-    .select(LOAD_SELECT)
-    .eq("vehicle_number_normalized", normalized)
-    .order("load_date", { ascending: false })
-    .order("created_at", { ascending: false });
+  let query = supabase.from("loads").select(LOAD_SELECT).eq("vehicle_number_normalized", normalized);
+  if (filters.dateFrom) query = query.gte("load_date", filters.dateFrom);
+  if (filters.dateTo) query = query.lte("load_date", filters.dateTo);
+
+  const { data, error } = await query.order("load_date", { ascending: false }).order("created_at", { ascending: false });
 
   if (error || !data) {
     if (error) logServerError("getVehicleHistory", error);
@@ -295,4 +322,36 @@ export async function getVehicleHistory(vehicleNumber: string): Promise<VehicleH
 
   const loads = (data as unknown as LoadRow[]).map(mapLoadRow);
   return { vehicleNumber: loads[0]?.vehicleNumber ?? vehicleNumber, summary: summarize(loads), loads };
+}
+
+/**
+ * Renames a vehicle number across every load that used it — there's no
+ * separate vehicles table (see 0001_init_schema.sql), so this is a bulk
+ * update over `loads` keyed by the normalized number. Unlike company/party
+ * names there's no uniqueness constraint to violate: renaming onto an
+ * existing vehicle number simply merges the two histories.
+ */
+export async function renameVehicleNumber(oldVehicleNumber: string, newVehicleNumber: string): Promise<RenameResult> {
+  const parsed = vehicleNumberSchema.safeParse(newVehicleNumber);
+  if (!parsed.success) {
+    return { success: false, error: parsed.error.issues[0]?.message ?? "Required" };
+  }
+
+  const user = await getAuthedUser();
+  if (!user) return { success: false, error: "You need to be logged in." };
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("loads")
+    .update({ vehicle_number: parsed.data })
+    .eq("vehicle_number_normalized", normalizeVehicleNumber(oldVehicleNumber))
+    .eq("user_id", user.id);
+
+  if (error) {
+    logServerError("renameVehicleNumber", error);
+    return { success: false, error: friendlyErrorMessage(error, "Couldn't rename this vehicle. Please try again.") };
+  }
+
+  revalidatePath("/", "layout");
+  return { success: true, name: parsed.data };
 }

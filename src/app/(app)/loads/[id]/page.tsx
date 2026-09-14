@@ -7,7 +7,7 @@ import { BackLink } from "@/components/common/BackLink";
 import { ConfirmDeleteDialog } from "@/components/loads/ConfirmDeleteDialog";
 import { getLoad } from "@/lib/actions/loads";
 import { getCurrentProfile } from "@/lib/actions/profile";
-import { calculateLoadAmountBreakdown } from "@/lib/calculations/loadCalculations";
+import { calculateLoadAmountBreakdown, calculateProfit, round2 } from "@/lib/calculations/loadCalculations";
 import { formatCurrency, formatNumber } from "@/lib/formatting/currency";
 import { formatDateTime, formatLongDate } from "@/lib/formatting/date";
 
@@ -26,6 +26,8 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
     partyName: load.partyName,
     companyName: load.companyName,
   });
+  const otherAmount = round2(load.driverAdvance + load.vehicleRent + load.dieselCost);
+  const profit = calculateProfit(difference, load.driverAdvance, load.vehicleRent, load.dieselCost);
 
   return (
     <div className="mx-auto max-w-lg space-y-5">
@@ -72,7 +74,14 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
         <div className="mt-4 space-y-2 border-t border-border pt-4">
           <AmountRow label="Party Amount" value={formatCurrency(partyAmount)} />
           <AmountRow label="Company Amount" value={formatCurrency(companyAmount)} />
-          <AmountRow label="Difference" value={formatCurrency(difference)} />
+          <AmountRow label="Difference" value={formatCurrency(difference)} bold />
+          <AmountRow label="Other Amount" value={formatCurrency(otherAmount)} bold />
+          <AmountRow label="Difference − Other Amount" value={`${formatCurrency(difference)} − ${formatCurrency(otherAmount)}`} />
+        </div>
+
+        <div className="mt-3 flex items-center justify-between rounded-lg border border-primary/30 bg-primary/10 p-4">
+          <span className="text-base font-bold text-foreground">Profit</span>
+          <span className="text-xl font-bold text-primary">{formatCurrency(profit)}</span>
         </div>
       </div>
 
@@ -94,11 +103,11 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
   );
 }
 
-function AmountRow({ label, value }: { label: string; value: string }) {
+function AmountRow({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
   return (
     <div className="flex items-center justify-between py-1">
-      <span className="text-base text-muted-foreground">{label}</span>
-      <span className="text-lg font-semibold text-foreground">{value}</span>
+      <span className={bold ? "text-base font-semibold text-foreground" : "text-base text-muted-foreground"}>{label}</span>
+      <span className={bold ? "text-lg font-extrabold text-foreground" : "text-lg font-semibold text-foreground"}>{value}</span>
     </div>
   );
 }
