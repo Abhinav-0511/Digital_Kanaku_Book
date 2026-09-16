@@ -17,7 +17,16 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
 
   if (!load) notFound();
   const weightUnit = profile?.weightUnit ?? "kg";
-  const { partyAmount, companyAmount, difference } = calculateLoadAmountBreakdown({
+  const {
+    partyAmount: party1Amount,
+    party2Amount,
+    combinedWeight,
+    companyAmount,
+    partyAmountExGst,
+    party2AmountExGst,
+    companyAmountExGst,
+    difference,
+  } = calculateLoadAmountBreakdown({
     weight: load.weight,
     rate: load.rate,
     companyRate: load.companyRate,
@@ -25,7 +34,12 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
     gstPercentage: load.gstPercentage,
     partyName: load.partyName,
     companyName: load.companyName,
+    party2Enabled: Boolean(load.party2Id),
+    party2Weight: load.party2Weight,
+    party2Name: load.party2Name,
   });
+  const partyAmount = round2(party1Amount + party2Amount);
+  const partyBaseAmount = round2(partyAmountExGst + party2AmountExGst);
   const otherAmount = round2(load.driverAdvance + load.vehicleRent + load.dieselCost);
   const profit = calculateProfit(difference, load.driverAdvance, load.vehicleRent, load.dieselCost);
 
@@ -50,17 +64,30 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
       </div>
 
       <div className="rounded-xl border border-border bg-card p-4">
-        <div className="rounded-lg bg-primary/10 p-4 text-center">
-          <p className="text-xs font-medium uppercase tracking-wide text-primary/80">Total Amount</p>
-          <p className="text-3xl font-bold text-primary">{formatCurrency(load.totalAmount)}</p>
+        <div className="grid grid-cols-2 gap-3 rounded-lg bg-primary/10 p-4 text-center">
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-primary/80">Party Amount</p>
+            <p className="text-2xl font-bold text-primary">{formatCurrency(partyAmount)}</p>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-primary/80">Company Amount</p>
+            <p className="text-2xl font-bold text-primary">{formatCurrency(companyAmount)}</p>
+          </div>
         </div>
 
         <dl className="mt-4 divide-y divide-border text-sm">
-          <Row label="Weight" value={`${formatNumber(load.weight)} ${weightUnit}`} emphasize />
+          <Row label="Weight" value={`${formatNumber(combinedWeight)} ${weightUnit}`} emphasize />
           <Row label="Company" value={load.companyName || "—"} href={load.companyId ? `/companies/${load.companyId}` : undefined} />
           <Row label="Company Rate" value={formatCurrency(load.companyRate)} />
           <Row label="Party" value={load.partyName || "—"} href={load.partyId ? `/parties/${load.partyId}` : undefined} />
           <Row label="Party Rate" value={formatCurrency(load.rate)} />
+          {load.party2Id ? (
+            <>
+              <Row label="Party 2" value={load.party2Name || "—"} href={`/parties/${load.party2Id}`} />
+              <Row label="Party 2 Weight" value={`${formatNumber(load.party2Weight)} ${weightUnit}`} />
+              <Row label="Party 2 Amount" value={formatCurrency(load.party2TotalAmount)} />
+            </>
+          ) : null}
           <Row label="GST Type" value={load.gstEnabled ? "Applied" : "No GST"} />
           {load.gstEnabled ? <Row label="GST Percentage" value={`${formatNumber(load.gstPercentage)}%`} /> : null}
           <Row label="GST Amount" value={formatCurrency(load.gstAmount)} />
@@ -72,8 +99,8 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
         </dl>
 
         <div className="mt-4 space-y-2 border-t border-border pt-4">
-          <AmountRow label="Party Amount" value={formatCurrency(partyAmount)} />
-          <AmountRow label="Company Amount" value={formatCurrency(companyAmount)} />
+          <AmountRow label="Party Amount" value={formatCurrency(partyBaseAmount)} />
+          <AmountRow label="Company Amount" value={formatCurrency(companyAmountExGst)} />
           <AmountRow label="Difference" value={formatCurrency(difference)} bold />
           <AmountRow label="Other Amount" value={formatCurrency(otherAmount)} bold />
           <AmountRow label="Difference − Other Amount" value={`${formatCurrency(difference)} − ${formatCurrency(otherAmount)}`} />

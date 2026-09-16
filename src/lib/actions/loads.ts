@@ -23,6 +23,8 @@ interface LoadFormInput {
   vehicleNumber: string;
   companyName: string;
   partyName: string;
+  party2Name: string;
+  party2Weight: string;
   rate: string;
   companyRate: string;
   driverAdvance: string;
@@ -41,6 +43,7 @@ async function resolveAndValidate(input: LoadFormInput) {
     driverAdvance: input.driverAdvance === "" ? 0 : input.driverAdvance,
     vehicleRent: input.vehicleRent === "" ? 0 : input.vehicleRent,
     dieselCost: input.dieselCost === "" ? 0 : input.dieselCost,
+    party2Weight: input.party2Weight === "" ? 0 : input.party2Weight,
     customGstPercentage: input.customGstPercentage === "" ? undefined : input.customGstPercentage,
   });
 
@@ -48,18 +51,21 @@ async function resolveAndValidate(input: LoadFormInput) {
     return { success: false as const, error: parsed.error.issues[0]?.message ?? "Please check your details." };
   }
 
-  const [company, party] = await Promise.all([
+  const [company, party, party2] = await Promise.all([
     parsed.data.companyName.trim() ? findOrCreateLookup("companies", parsed.data.companyName) : null,
     parsed.data.partyName.trim() ? findOrCreateLookup("parties", parsed.data.partyName) : null,
+    parsed.data.party2Name.trim() ? findOrCreateLookup("parties", parsed.data.party2Name) : null,
   ]);
   if (company && !company.success) return { success: false as const, error: company.error };
   if (party && !party.success) return { success: false as const, error: party.error };
+  if (party2 && !party2.success) return { success: false as const, error: party2.error };
 
   return {
     success: true as const,
     data: parsed.data,
     companyId: company?.success ? company.id : null,
     partyId: party?.success ? party.id : null,
+    party2Id: party2?.success ? party2.id : null,
   };
 }
 
@@ -88,12 +94,14 @@ export async function createLoad(input: LoadFormInput): Promise<LoadActionResult
       vehicle_number_normalized: normalizeVehicleNumber(resolved.data.vehicleNumber),
       company_id: resolved.companyId,
       party_id: resolved.partyId,
+      party2_id: resolved.party2Id,
       weight: resolved.data.weight,
       rate: resolved.data.rate,
       company_rate: resolved.data.companyRate,
       driver_advance: resolved.data.driverAdvance,
       vehicle_rent: resolved.data.vehicleRent,
       diesel_cost: resolved.data.dieselCost,
+      party2_weight: resolved.data.party2Weight,
       gst_enabled: resolved.data.gstEnabled,
       gst_percentage: resolved.data.gstPercentage,
     })
@@ -125,12 +133,14 @@ export async function updateLoad(loadId: string, input: LoadFormInput): Promise<
       vehicle_number_normalized: normalizeVehicleNumber(resolved.data.vehicleNumber),
       company_id: resolved.companyId,
       party_id: resolved.partyId,
+      party2_id: resolved.party2Id,
       weight: resolved.data.weight,
       rate: resolved.data.rate,
       company_rate: resolved.data.companyRate,
       driver_advance: resolved.data.driverAdvance,
       vehicle_rent: resolved.data.vehicleRent,
       diesel_cost: resolved.data.dieselCost,
+      party2_weight: resolved.data.party2Weight,
       gst_enabled: resolved.data.gstEnabled,
       gst_percentage: resolved.data.gstPercentage,
     })

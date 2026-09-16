@@ -29,7 +29,7 @@ export function LoadCard({ load, weightUnit }: { load: Load; weightUnit: string 
       </div>
 
       <p className="mt-2 text-sm text-muted-foreground">
-        {formatNumber(load.weight)} {weightUnit} × {formatCurrency(load.rate)}
+        {formatNumber(load.weight + load.party2Weight)} {weightUnit} × {formatCurrency(load.rate)}
       </p>
 
       <div className="mt-3 flex items-end justify-between">

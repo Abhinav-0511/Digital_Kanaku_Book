@@ -10,7 +10,7 @@ import { NameCombobox } from "./NameCombobox";
 import { VehicleInput } from "./VehicleInput";
 import { GstSelector } from "./GstSelector";
 import { LoadSummaryPreview } from "./LoadSummaryPreview";
-import { calculateLoadAmounts, calculateLoadAmountBreakdown, calculateProfit } from "@/lib/calculations/loadCalculations";
+import { calculateLoadAmounts, calculateLoadAmountBreakdown, calculateProfit, round2 } from "@/lib/calculations/loadCalculations";
 import { searchCompanies } from "@/lib/actions/companies";
 import { searchParties } from "@/lib/actions/parties";
 import { createLoad, updateLoad } from "@/lib/actions/loads";
@@ -22,6 +22,9 @@ interface FormState {
   vehicleNumber: string;
   companyName: string;
   partyName: string;
+  party2Enabled: boolean;
+  party2Name: string;
+  party2Weight: string;
   rate: string;
   companyRate: string;
   driverAdvance: string;
@@ -39,6 +42,9 @@ function initialStateFromLoad(load?: Load): FormState {
       vehicleNumber: "",
       companyName: "",
       partyName: "",
+      party2Enabled: false,
+      party2Name: "",
+      party2Weight: "",
       rate: "",
       companyRate: "",
       driverAdvance: "",
@@ -60,6 +66,9 @@ function initialStateFromLoad(load?: Load): FormState {
     vehicleNumber: load.vehicleNumber,
     companyName: load.companyName,
     partyName: load.partyName,
+    party2Enabled: Boolean(load.party2Id),
+    party2Name: load.party2Name,
+    party2Weight: load.party2Weight ? String(load.party2Weight) : "",
     rate: String(load.rate),
     companyRate: load.companyRate ? String(load.companyRate) : "",
     driverAdvance: load.driverAdvance ? String(load.driverAdvance) : "",
@@ -99,28 +108,51 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
     const driverAdvance = Number(values.driverAdvance || 0);
     const vehicleRent = Number(values.vehicleRent || 0);
     const dieselCost = Number(values.dieselCost || 0);
-    const { baseAmount, gstAmount, totalAmount } = calculateLoadAmounts({ weight, rate, gstEnabled, gstPercentage });
-    const { partyAmount, companyBaseAmount, companyGstPercentage, companyGstAmount, companyTotal, companyAmount, difference } =
-      calculateLoadAmountBreakdown({
-        weight,
-        rate,
-        companyRate,
-        gstEnabled,
-        gstPercentage,
-        partyName: values.partyName,
-        companyName: values.companyName,
-      });
+    const party2Weight = Number(values.party2Weight || 0);
+    const { baseAmount, gstAmount, totalAmount: partyTotalAmount } = calculateLoadAmounts({ weight, rate, gstEnabled, gstPercentage });
+    const {
+      partyAmount: party1Amount,
+      party2Amount,
+      combinedWeight,
+      companyBaseAmount,
+      companyGstPercentage,
+      companyGstAmount,
+      companyTotal,
+      companyAmount,
+      party2BaseAmount,
+      party2GstAmount,
+      party2TotalAmount,
+      difference,
+    } = calculateLoadAmountBreakdown({
+      weight,
+      rate,
+      companyRate,
+      gstEnabled,
+      gstPercentage,
+      partyName: values.partyName,
+      companyName: values.companyName,
+      party2Enabled: values.party2Enabled,
+      party2Weight,
+      party2Name: values.party2Name,
+    });
+    const partyAmount = round2(party1Amount + party2Amount);
     const profit = calculateProfit(difference, driverAdvance, vehicleRent, dieselCost);
+    const totalAmount = values.party2Enabled ? round2(partyTotalAmount + party2TotalAmount) : partyTotalAmount;
     return {
       weight,
       rate,
       companyRate,
+      party2Weight,
+      combinedWeight,
       partyAmount,
       companyBaseAmount,
       companyGstPercentage,
       companyGstAmount,
       companyTotal,
       companyAmount,
+      party2BaseAmount,
+      party2GstAmount,
+      party2TotalAmount,
       difference,
       profit,
       gstEnabled,
@@ -177,6 +209,15 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
         nextErrors.dieselCost = "Diesel cost cannot be negative.";
       }
     }
+    if (values.party2Enabled) {
+      if (!values.party2Name.trim()) {
+        nextErrors.party2Name = "Select the second party.";
+      }
+      const party2Weight = Number(values.party2Weight);
+      if (!values.party2Weight || !Number.isFinite(party2Weight) || party2Weight <= 0) {
+        nextErrors.party2Weight = "Enter a valid weight for the second party.";
+      }
+    }
     if (values.gstMode === "custom") {
       const pct = Number(values.customGstPercentage);
       if (values.customGstPercentage === "" || !Number.isFinite(pct) || pct < 0 || pct > 100) {
@@ -199,6 +240,8 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
       vehicleNumber: values.vehicleNumber,
       companyName: values.companyName,
       partyName: values.partyName,
+      party2Name: values.party2Enabled ? values.party2Name : "",
+      party2Weight: values.party2Enabled ? values.party2Weight : "",
       rate: values.rate,
       companyRate: values.companyRate,
       driverAdvance: values.driverAdvance,
@@ -320,6 +363,65 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
         />
       </Field>
 
+      {values.party2Enabled ? (
+        <div className="space-y-5 rounded-xl border border-dashed border-border p-4">
+          <div className="flex items-center justify-between">
+            <span className="text-sm font-semibold text-foreground">Party 2</span>
+            <button
+              type="button"
+              className="text-sm font-medium text-destructive hover:underline"
+              onClick={() => {
+                setField("party2Enabled", false);
+                setField("party2Name", "");
+                setField("party2Weight", "");
+              }}
+            >
+              Remove
+            </button>
+          </div>
+
+          <Field label="Party 2 Name" htmlFor="party2Name" error={errors.party2Name}>
+            <NameCombobox
+              id="party2Name"
+              label="Party"
+              placeholder="Type or select a party"
+              value={values.party2Name}
+              onChange={(v) => setField("party2Name", v)}
+              search={searchParties}
+              error={Boolean(errors.party2Name)}
+            />
+          </Field>
+
+          <Field label="Party 2 Weight" htmlFor="party2Weight" error={errors.party2Weight}>
+            <div className="relative">
+              <Input
+                id="party2Weight"
+                inputMode="decimal"
+                type="number"
+                min={0}
+                step="0.01"
+                placeholder="0.00"
+                className="h-11 pr-14 text-base"
+                value={values.party2Weight}
+                onChange={(e) => setField("party2Weight", e.target.value)}
+                aria-invalid={Boolean(errors.party2Weight)}
+              />
+              <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">
+                {weightUnit}
+              </span>
+            </div>
+          </Field>
+        </div>
+      ) : (
+        <button
+          type="button"
+          className="text-sm font-medium text-primary hover:underline"
+          onClick={() => setField("party2Enabled", true)}
+        >
+          + Add another party
+        </button>
+      )}
+
       <Field label="Party Rate" htmlFor="rate" error={errors.rate}>
         <MoneyInput id="rate" value={values.rate} onChange={(v) => setField("rate", v)} error={Boolean(errors.rate)} />
       </Field>
@@ -379,6 +481,7 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
         gstPercentage={preview.gstPercentage}
         gstAmount={preview.gstAmount}
         companyRate={preview.companyRate}
+        companyWeight={preview.combinedWeight}
         companyBaseAmount={preview.companyBaseAmount}
         companyGstPercentage={preview.companyGstPercentage}
         companyGstAmount={preview.companyGstAmount}
@@ -391,6 +494,11 @@ export function LoadForm({ mode, loadId, initialLoad, weightUnit }: LoadFormProp
         vehicleRent={preview.vehicleRent}
         dieselCost={preview.dieselCost}
         totalAmount={preview.totalAmount}
+        party2Enabled={values.party2Enabled}
+        party2Weight={preview.party2Weight}
+        party2BaseAmount={preview.party2BaseAmount}
+        party2GstAmount={preview.party2GstAmount}
+        party2TotalAmount={preview.party2TotalAmount}
       />
 
       <div className="sticky bottom-16 z-10 -mx-4 border-t border-border bg-background/95 px-4 py-3 backdrop-blur md:static md:mx-0 md:border-0 md:bg-transparent md:p-0 md:backdrop-blur-none">

@@ -32,7 +32,7 @@ export function LoadTable({ loads, weightUnit }: { loads: Load[]; weightUnit: st
               <td className="px-4 py-3">{load.companyName || "—"}</td>
               <td className="px-4 py-3">{load.partyName || "—"}</td>
               <td className="px-4 py-3 text-right">
-                {formatNumber(load.weight)} {weightUnit}
+                {formatNumber(load.weight + load.party2Weight)} {weightUnit}
               </td>
               <td className="px-4 py-3 text-right">{formatCurrency(load.rate)}</td>
               <td className="px-4 py-3">

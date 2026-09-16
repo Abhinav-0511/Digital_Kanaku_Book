@@ -85,16 +85,21 @@ export interface Database {
           vehicle_number_normalized: string;
           company_id: string | null;
           party_id: string | null;
+          party2_id: string | null;
           weight: number;
           rate: number;
           company_rate: number;
           driver_advance: number;
           vehicle_rent: number;
           diesel_cost: number;
+          party2_weight: number;
           gst_enabled: boolean;
           gst_percentage: number;
           base_amount: number;
           gst_amount: number;
+          party2_base_amount: number;
+          party2_gst_amount: number;
+          party2_total_amount: number;
           total_amount: number;
           created_at: string;
           updated_at: string;
@@ -107,12 +112,14 @@ export interface Database {
           vehicle_number_normalized: string;
           company_id?: string | null;
           party_id?: string | null;
+          party2_id?: string | null;
           weight: number;
           rate: number;
           company_rate?: number;
           driver_advance?: number;
           vehicle_rent?: number;
           diesel_cost?: number;
+          party2_weight?: number;
           gst_enabled?: boolean;
           gst_percentage?: number;
         };
@@ -122,12 +129,14 @@ export interface Database {
           vehicle_number_normalized?: string;
           company_id?: string | null;
           party_id?: string | null;
+          party2_id?: string | null;
           weight?: number;
           rate?: number;
           company_rate?: number;
           driver_advance?: number;
           vehicle_rent?: number;
           diesel_cost?: number;
+          party2_weight?: number;
           gst_enabled?: boolean;
           gst_percentage?: number;
         };
@@ -142,6 +151,13 @@ export interface Database {
           {
             foreignKeyName: "loads_party_id_fkey";
             columns: ["party_id"];
+            isOneToOne: false;
+            referencedRelation: "parties";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "loads_party2_id_fkey";
+            columns: ["party2_id"];
             isOneToOne: false;
             referencedRelation: "parties";
             referencedColumns: ["id"];

@@ -50,6 +50,8 @@ export const loadInputSchema = z
     vehicleNumber: vehicleNumberSchema,
     companyName: z.string().trim().max(100, "Company name is too long").optional().default(""),
     partyName: z.string().trim().max(100, "Party name is too long").optional().default(""),
+    party2Name: z.string().trim().max(100, "Party name is too long").optional().default(""),
+    party2Weight: z.coerce.number().min(0, "Party 2 weight cannot be negative").default(0),
     rate: z.coerce.number().min(0, "Party rate cannot be negative").default(0),
     companyRate: z.coerce.number().min(0, "Company rate cannot be negative").default(0),
     driverAdvance: z.coerce.number().min(0, "Driver advance cannot be negative").default(0),
@@ -75,6 +77,14 @@ export const loadInputSchema = z
   .refine((data) => data.companyName.trim() !== "" || data.partyName.trim() !== "", {
     message: "Enter a company or a party.",
     path: ["partyName"],
+  })
+  .refine((data) => data.party2Weight <= 0 || data.party2Name.trim() !== "", {
+    message: "Select the second party.",
+    path: ["party2Name"],
+  })
+  .refine((data) => data.party2Name.trim() === "" || data.party2Weight > 0, {
+    message: "Enter a valid weight for the second party.",
+    path: ["party2Weight"],
   });
 
 export type LoadInput = z.infer<typeof loadInputSchema>;

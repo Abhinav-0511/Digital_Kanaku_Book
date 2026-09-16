@@ -10,6 +10,7 @@ interface LoadSummaryPreviewProps {
   gstPercentage: number;
   gstAmount: number;
   companyRate: number;
+  companyWeight: number;
   companyBaseAmount: number;
   companyGstPercentage: number;
   companyGstAmount: number;
@@ -22,6 +23,11 @@ interface LoadSummaryPreviewProps {
   vehicleRent: number;
   dieselCost: number;
   totalAmount: number;
+  party2Enabled?: boolean;
+  party2Weight?: number;
+  party2BaseAmount?: number;
+  party2GstAmount?: number;
+  party2TotalAmount?: number;
 }
 
 export function LoadSummaryPreview({
@@ -33,6 +39,7 @@ export function LoadSummaryPreview({
   gstPercentage,
   gstAmount,
   companyRate,
+  companyWeight,
   companyBaseAmount,
   companyGstPercentage,
   companyGstAmount,
@@ -45,6 +52,11 @@ export function LoadSummaryPreview({
   vehicleRent,
   dieselCost,
   totalAmount,
+  party2Enabled,
+  party2Weight = 0,
+  party2BaseAmount = 0,
+  party2GstAmount = 0,
+  party2TotalAmount = 0,
 }: LoadSummaryPreviewProps) {
   const hasOtherCosts = companyRate > 0 || driverAdvance > 0 || vehicleRent > 0 || dieselCost > 0;
   const otherAmount = round2(driverAdvance + vehicleRent + dieselCost);
@@ -54,6 +66,18 @@ export function LoadSummaryPreview({
       <Row label={`Weight × Party Rate`} value={`${formatNumber(weight)} ${weightUnit} × ${formatCurrency(rate)}`} />
       <Row label="Base Amount" value={formatCurrency(baseAmount)} />
       <Row label={gstEnabled ? `GST (${formatNumber(gstPercentage)}%)` : "GST"} value={gstEnabled ? formatCurrency(gstAmount) : "No GST"} />
+
+      {party2Enabled ? (
+        <div className="space-y-2.5 border-t border-dashed border-border pt-2.5">
+          <Row label="Party 2: Weight × Rate" value={`${formatNumber(party2Weight)} ${weightUnit} × ${formatCurrency(rate)}`} />
+          <Row label="Party 2 Base Amount" value={formatCurrency(party2BaseAmount)} />
+          <Row
+            label={gstEnabled ? `Party 2 GST (${formatNumber(gstPercentage)}%)` : "Party 2 GST"}
+            value={gstEnabled ? formatCurrency(party2GstAmount) : "No GST"}
+          />
+          <Row label="Party 2 Total" value={formatCurrency(party2TotalAmount)} bold />
+        </div>
+      ) : null}
 
       <div className="flex items-center justify-between border-t border-border pt-2.5">
         <span className="text-sm font-semibold text-foreground">TOTAL</span>
@@ -67,7 +91,7 @@ export function LoadSummaryPreview({
             <>
               <Row
                 label="Weight × Company Rate"
-                value={`${formatNumber(weight)} ${weightUnit} × ${formatCurrency(companyRate)}`}
+                value={`${formatNumber(companyWeight)} ${weightUnit} × ${formatCurrency(companyRate)}`}
               />
               <Row label="Company Base Amount" value={formatCurrency(companyBaseAmount)} />
               <Row label={`GST (${formatNumber(companyGstPercentage)}%)`} value={formatCurrency(companyGstAmount)} />

@@ -31,6 +31,9 @@ export interface Load {
   companyName: string;
   partyId: string | null;
   partyName: string;
+  party2Id: string | null;
+  party2Name: string;
+  party2Weight: number;
   weight: number;
   rate: number;
   companyRate: number;
@@ -41,6 +44,9 @@ export interface Load {
   gstPercentage: number;
   baseAmount: number;
   gstAmount: number;
+  party2BaseAmount: number;
+  party2GstAmount: number;
+  party2TotalAmount: number;
   totalAmount: number;
   createdAt: string;
   updatedAt: string;
@@ -53,6 +59,9 @@ export interface LoadFormValues {
   companyName: string;
   partyId: string | null;
   partyName: string;
+  party2Id: string | null;
+  party2Name: string;
+  party2Weight: string;
   rate: string;
   companyRate: string;
   driverAdvance: string;

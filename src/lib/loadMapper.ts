@@ -2,7 +2,7 @@ import { calculateLoadAmountBreakdown, calculateProfit, round2 } from "@/lib/cal
 import type { DailySummary, Load } from "@/types/domain";
 
 export const LOAD_SELECT =
-  "id, load_date, vehicle_number, company_id, party_id, weight, rate, company_rate, driver_advance, vehicle_rent, diesel_cost, gst_enabled, gst_percentage, base_amount, gst_amount, total_amount, created_at, updated_at, companies(name), parties(name)";
+  "id, load_date, vehicle_number, company_id, party_id, party2_id, weight, rate, company_rate, driver_advance, vehicle_rent, diesel_cost, party2_weight, gst_enabled, gst_percentage, base_amount, gst_amount, party2_base_amount, party2_gst_amount, party2_total_amount, total_amount, created_at, updated_at, companies(name), parties!loads_party_id_fkey(name), party2:parties!loads_party2_id_fkey(name)";
 
 export interface LoadRow {
   id: string;
@@ -10,21 +10,27 @@ export interface LoadRow {
   vehicle_number: string;
   company_id: string | null;
   party_id: string | null;
+  party2_id: string | null;
   weight: number;
   rate: number;
   company_rate: number;
   driver_advance: number;
   vehicle_rent: number;
   diesel_cost: number;
+  party2_weight: number;
   gst_enabled: boolean;
   gst_percentage: number;
   base_amount: number;
   gst_amount: number;
+  party2_base_amount: number;
+  party2_gst_amount: number;
+  party2_total_amount: number;
   total_amount: number;
   created_at: string;
   updated_at: string;
   companies: { name: string } | { name: string }[] | null;
   parties: { name: string } | { name: string }[] | null;
+  party2: { name: string } | { name: string }[] | null;
 }
 
 function relatedName(rel: LoadRow["companies"]): string {
@@ -41,6 +47,9 @@ export function mapLoadRow(row: LoadRow): Load {
     companyName: relatedName(row.companies),
     partyId: row.party_id,
     partyName: relatedName(row.parties),
+    party2Id: row.party2_id,
+    party2Name: relatedName(row.party2),
+    party2Weight: Number(row.party2_weight),
     weight: Number(row.weight),
     rate: Number(row.rate),
     companyRate: Number(row.company_rate),
@@ -51,6 +60,9 @@ export function mapLoadRow(row: LoadRow): Load {
     gstPercentage: Number(row.gst_percentage),
     baseAmount: Number(row.base_amount),
     gstAmount: Number(row.gst_amount),
+    party2BaseAmount: Number(row.party2_base_amount),
+    party2GstAmount: Number(row.party2_gst_amount),
+    party2TotalAmount: Number(row.party2_total_amount),
     totalAmount: Number(row.total_amount),
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -58,9 +70,9 @@ export function mapLoadRow(row: LoadRow): Load {
 }
 
 export function summarize(loads: Load[]): DailySummary {
-  const totals = loads.reduce<Omit<DailySummary, "totalDifference" | "totalProfit">>(
+  const totals = loads.reduce<Omit<DailySummary, "totalProfit">>(
     (acc, l) => {
-      const { partyAmount, companyAmount } = calculateLoadAmountBreakdown({
+      const { partyAmount, party2Amount, companyAmount, difference } = calculateLoadAmountBreakdown({
         weight: l.weight,
         rate: l.rate,
         companyRate: l.companyRate,
@@ -68,18 +80,25 @@ export function summarize(loads: Load[]): DailySummary {
         gstPercentage: l.gstPercentage,
         partyName: l.partyName,
         companyName: l.companyName,
+        party2Enabled: Boolean(l.party2Id),
+        party2Weight: l.party2Weight,
+        party2Name: l.party2Name,
       });
       return {
         loadCount: acc.loadCount + 1,
-        totalWeight: acc.totalWeight + l.weight,
-        totalBaseAmount: acc.totalBaseAmount + l.baseAmount,
-        totalPartyAmount: acc.totalPartyAmount + partyAmount,
+        totalWeight: acc.totalWeight + l.weight + l.party2Weight,
+        totalBaseAmount: acc.totalBaseAmount + l.baseAmount + l.party2BaseAmount,
+        totalPartyAmount: acc.totalPartyAmount + partyAmount + party2Amount,
         totalCompanyAmount: acc.totalCompanyAmount + companyAmount,
-        totalGstAmount: acc.totalGstAmount + l.gstAmount,
+        totalGstAmount: acc.totalGstAmount + l.gstAmount + l.party2GstAmount,
         totalDriverAdvance: acc.totalDriverAdvance + l.driverAdvance,
         totalVehicleRent: acc.totalVehicleRent + l.vehicleRent,
         totalDieselCost: acc.totalDieselCost + l.dieselCost,
         totalAmount: acc.totalAmount + l.totalAmount,
+        // Summed per-load (GST-excluded on both sides), not derived from the
+        // GST-inclusive totalPartyAmount/totalCompanyAmount above — see
+        // calculateLoadAmountBreakdown.
+        totalDifference: acc.totalDifference + difference,
       };
     },
     {
@@ -93,10 +112,11 @@ export function summarize(loads: Load[]): DailySummary {
       totalVehicleRent: 0,
       totalDieselCost: 0,
       totalAmount: 0,
+      totalDifference: 0,
     },
   );
 
-  const totalDifference = round2(totals.totalCompanyAmount - totals.totalPartyAmount);
+  const totalDifference = round2(totals.totalDifference);
   const totalProfit = calculateProfit(totalDifference, totals.totalDriverAdvance, totals.totalVehicleRent, totals.totalDieselCost);
 
   return { ...totals, totalDifference, totalProfit };
