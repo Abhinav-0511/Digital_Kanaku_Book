@@ -2,11 +2,12 @@ import Link from "next/link";
 import { Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { DateNav } from "@/components/dashboard/DateNav";
+import { PaymentFilterPanel } from "@/components/payments/PaymentFilterPanel";
 import { PaymentList } from "@/components/payments/PaymentList";
-import { getPaymentsForDate } from "@/lib/actions/payments";
+import { getPaymentCountsForMonth, searchPayments } from "@/lib/actions/payments";
 import { formatCurrency } from "@/lib/formatting/currency";
-import { todayIso } from "@/lib/formatting/date";
-import { summarizePayments } from "@/lib/paymentMapper";
+import { formatShortDate, todayIso } from "@/lib/formatting/date";
+import type { PaymentFilters } from "@/types/domain";
 
 interface PaymentsPageProps {
   searchParams: Promise<Record<string, string | undefined>>;
@@ -14,9 +15,17 @@ interface PaymentsPageProps {
 
 export default async function PaymentsPage({ searchParams }: PaymentsPageProps) {
   const params = await searchParams;
+  const rangeMode = Boolean(params.from || params.to);
   const date = params.date ?? todayIso();
-  const payments = await getPaymentsForDate(date);
-  const summary = summarizePayments(payments);
+
+  const filters: PaymentFilters = {
+    dateFrom: rangeMode ? params.from : date,
+    dateTo: rangeMode ? params.to : date,
+    companyName: params.company,
+    partyName: params.party,
+  };
+
+  const { payments, summary } = await searchPayments(filters);
 
   return (
     <div className="space-y-5">
@@ -34,7 +43,18 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
         />
       </div>
 
-      <DateNav date={date} basePath="/payments" />
+      {rangeMode ? (
+        <div className="rounded-xl border border-border bg-card p-3 text-sm text-muted-foreground">
+          Showing payments from <span className="font-medium text-foreground">{params.from ? formatShortDate(params.from) : "the start"}</span> to{" "}
+          <span className="font-medium text-foreground">{params.to ? formatShortDate(params.to) : "today"}</span>
+        </div>
+      ) : (
+        <DateNav date={date} basePath="/payments" fetchMonthCounts={getPaymentCountsForMonth} itemLabel="payment" />
+      )}
+
+      <div className="flex justify-end">
+        <PaymentFilterPanel basePath="/payments" />
+      </div>
 
       <div className="grid grid-cols-2 gap-3">
         <div className="rounded-xl border border-border bg-card p-4">
@@ -49,8 +69,12 @@ export default async function PaymentsPage({ searchParams }: PaymentsPageProps) 
 
       <PaymentList
         payments={payments}
-        emptyTitle="No payments recorded today"
-        emptyDescription="Add your first payment for today."
+        emptyTitle={rangeMode || params.company || params.party ? "No payments found" : "No payments recorded today"}
+        emptyDescription={
+          rangeMode || params.company || params.party
+            ? "Try another company or party."
+            : "Add your first payment for today."
+        }
       />
     </div>
   );

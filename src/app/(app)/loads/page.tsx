@@ -6,7 +6,7 @@ import { FilterPanel } from "@/components/search/FilterPanel";
 import { SummaryCards } from "@/components/dashboard/SummaryCards";
 import { LoadList } from "@/components/loads/LoadList";
 import { getCurrentProfile } from "@/lib/actions/profile";
-import { searchLoads } from "@/lib/actions/loads";
+import { getLoadCountsForMonth, searchLoads } from "@/lib/actions/loads";
 import { formatShortDate, todayIso } from "@/lib/formatting/date";
 import type { LoadFilters } from "@/types/domain";
 
@@ -55,7 +55,7 @@ export default async function LoadsPage({ searchParams }: LoadsPageProps) {
           <span className="font-medium text-foreground">{params.to ? formatShortDate(params.to) : "today"}</span>
         </div>
       ) : (
-        <DateNav date={date} />
+        <DateNav date={date} fetchMonthCounts={getLoadCountsForMonth} itemLabel="load" />
       )}
 
       <div className="flex justify-end">

@@ -93,6 +93,45 @@ export function startOfMonthIso(iso: string = todayIso()): string {
   return `${y}-${String(m).padStart(2, "0")}-01`;
 }
 
+/** "YYYY-MM" for the month containing `iso`. */
+export function monthOf(iso: string): string {
+  return iso.slice(0, 7);
+}
+
+/** `month` ("YYYY-MM") shifted by `delta` months, as "YYYY-MM". */
+export function shiftMonth(month: string, delta: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1 + delta, 1));
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
+}
+
+/** "September 2026" from a "YYYY-MM" string. */
+export function formatMonthLabel(month: string): string {
+  const [y, m] = month.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-IN", { month: "long", year: "numeric", timeZone: "UTC" }).format(
+    new Date(Date.UTC(y, m - 1, 1)),
+  );
+}
+
+/** Every day shown in a month's calendar grid (Sun-Sat weeks, spilling into
+ * the adjacent months to fill the first/last week), as YYYY-MM-DD. */
+export function monthGridIso(month: string): { iso: string; inMonth: boolean }[] {
+  const [y, m] = month.split("-").map(Number);
+  const startDay = new Date(Date.UTC(y, m - 1, 1)).getUTCDay();
+  const daysInMonth = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const endDay = new Date(Date.UTC(y, m - 1, daysInMonth)).getUTCDay();
+
+  const cursor = new Date(Date.UTC(y, m - 1, 1 - startDay));
+  const gridEnd = new Date(Date.UTC(y, m - 1, daysInMonth + (6 - endDay)));
+
+  const cells: { iso: string; inMonth: boolean }[] = [];
+  while (cursor <= gridEnd) {
+    cells.push({ iso: cursor.toISOString().slice(0, 10), inMonth: cursor.getUTCMonth() === m - 1 });
+    cursor.setUTCDate(cursor.getUTCDate() + 1);
+  }
+  return cells;
+}
+
 export interface DateRangePreset {
   label: string;
   from: string;

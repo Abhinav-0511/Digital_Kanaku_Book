@@ -221,6 +221,39 @@ export async function getLoadsForDate(date: string): Promise<Load[]> {
   return cached(user.id, token, date);
 }
 
+/** Number of loads per day (YYYY-MM-DD) within `month` ("YYYY-MM"), for the calendar view. */
+export async function getLoadCountsForMonth(month: string): Promise<Record<string, number>> {
+  const user = await getAuthedUser();
+  if (!user) return {};
+  const token = await getAccessToken();
+  if (!token) return {};
+
+  const cached = unstable_cache(
+    async (userId: string, accessToken: string, forMonth: string) => {
+      const supabase = createTokenClient(accessToken);
+      const [y, m] = forMonth.split("-").map(Number);
+      const dateFrom = `${forMonth}-01`;
+      const dateTo = new Date(Date.UTC(y, m, 0)).toISOString().slice(0, 10);
+
+      const { data, error } = await supabase.from("loads").select("load_date").gte("load_date", dateFrom).lte("load_date", dateTo);
+
+      if (error || !data) {
+        if (error) logServerError("getLoadCountsForMonth", error);
+        return {};
+      }
+
+      const counts: Record<string, number> = {};
+      for (const row of data as { load_date: string }[]) {
+        counts[row.load_date] = (counts[row.load_date] ?? 0) + 1;
+      }
+      return counts;
+    },
+    ["getLoadCountsForMonth"],
+    { tags: [cacheTags.loads(user.id)], revalidate: CACHE_TTL_SECONDS },
+  );
+  return cached(user.id, token, month);
+}
+
 export interface SearchLoadsResult {
   loads: Load[];
   summary: DailySummary;

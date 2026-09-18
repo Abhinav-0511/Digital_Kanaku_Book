@@ -4,9 +4,21 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { MonthCalendarPopover } from "./MonthCalendarPopover";
 import { addDaysIso, formatLongDate, isToday, todayIso } from "@/lib/formatting/date";
 
-export function DateNav({ date, basePath = "/loads" }: { date: string; basePath?: string }) {
+export function DateNav({
+  date,
+  basePath = "/loads",
+  fetchMonthCounts,
+  itemLabel = "entry",
+}: {
+  date: string;
+  basePath?: string;
+  /** When given, shows a calendar button that browses the month with a per-day count. */
+  fetchMonthCounts?: (month: string) => Promise<Record<string, number>>;
+  itemLabel?: string;
+}) {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -31,6 +43,9 @@ export function DateNav({ date, basePath = "/loads" }: { date: string; basePath?
             <Button variant="outline" size="sm" className="h-8" onClick={() => goTo(todayIso())}>
               Today
             </Button>
+          ) : null}
+          {fetchMonthCounts ? (
+            <MonthCalendarPopover date={date} basePath={basePath} fetchCounts={fetchMonthCounts} itemLabel={itemLabel} />
           ) : null}
           <Input
             type="date"
