@@ -43,9 +43,14 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
   const otherAmount = round2(load.driverAdvance + load.vehicleRent + load.dieselCost);
   const profit = calculateProfit(difference, load.driverAdvance, load.vehicleRent, load.dieselCost);
 
+  // Return to the loads list on the date this load is on, not today's
+  // date — otherwise viewing/deleting an older load strands you back on
+  // today instead of the day you were browsing.
+  const backHref = `/loads?date=${load.loadDate}`;
+
   return (
     <div className="mx-auto max-w-lg space-y-5">
-      <BackLink href="/loads" label="Back to Loads" />
+      <BackLink href={backHref} label="Back to Loads" />
 
       <div className="flex items-start justify-between gap-3">
         <div>
@@ -124,7 +129,7 @@ export default async function LoadDetailPage({ params }: { params: Promise<{ id:
             </Link>
           }
         />
-        <ConfirmDeleteDialog loadId={load.id} className="flex-1" />
+        <ConfirmDeleteDialog loadId={load.id} redirectTo={backHref} className="flex-1" />
       </div>
     </div>
   );
